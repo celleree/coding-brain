@@ -4,7 +4,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { initBrain, loadStoredMemoryRecords, saveMemory } from "../dist/store-api.js";
+import { initBrain, loadStoredMemoryRecords } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 const repoRoot = process.cwd();
 const hookPath = path.join(repoRoot, "dist", "hooks", "session-end.js");

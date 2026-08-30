@@ -14,11 +14,23 @@ import {
   loadAllPreferences,
   normalizePreference,
   parsePreference,
-  saveMemory,
-  savePreference,
+  saveMemory as saveMemoryRecord,
+  savePreference as savePreferenceRecord,
   serializePreference,
   validatePreference,
 } from "../dist/store-api.js";
+
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
+
+function savePreference(preference, projectRoot, provenance) {
+  return savePreferenceRecord(
+    preference,
+    projectRoot,
+    provenance ?? { sourceBytes: Buffer.from(preference.reason, "utf8") },
+  );
+}
 
 await runTest("NL extraction: spec Chinese examples resolve to preferences", () => {
   const a = extractPreferenceFromNaturalLanguage("这个 skill 流程太繁琐，下次换一个快捷的");

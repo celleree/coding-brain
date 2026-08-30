@@ -12,6 +12,14 @@ RepoBrain separates durable memory from routing preferences and session-only hin
 | Routing preference | `.brain/preferences/` | Reusable prefer/avoid policy for skills/workflows |
 | Session profile | `.brain/runtime/session-profile.json` | Local, temporary constraints for the current session |
 
+Raw capture evidence is stored once as content-addressed blobs under `.brain/sources/sha256/`. Durable memories and
+preferences retain the existing `source` and `source_episode` provenance fields and add a separate `record_digest`
+attestation. Evidence blobs are outside every memory index and retrieval path.
+
+Trusted automatic usage, staleness, and lifecycle mutations retain `source_episode` and refresh `record_digest`.
+Changes caused by new user, session, failure, or routing-feedback evidence create a newly sourced successor and use
+the existing supersession lineage. Provenance-invalid active records fail closed before injection or routing.
+
 Session profile is merged after stored preferences and can override ordinary preference weight, but does not override hard blocked/suppress outcomes or static required skill constraints.
 
 ## 2. Routing Engine

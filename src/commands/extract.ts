@@ -4,6 +4,7 @@ import { stdout as output } from "node:process";
 import { loadConfig, renderConfigWarnings } from "../config.js";
 import { buildCommitExtractionInput } from "../git-commit.js";
 import { evaluateExtractWorthiness } from "../extract-suggestion.js";
+import { decodeStdinBuffer } from "../stdin-decode.js";
 import { initBrain } from "../store.js";
 import type { Memory, MemoryType } from "../types.js";
 import * as helpers from "./helpers.js";
@@ -21,8 +22,11 @@ export function register(program: Command): void {
 
       const config = await loadConfig(projectRoot);
       renderConfigWarnings(config).forEach((warning) => process.stderr.write(`[repobrain] ${warning}\n`));
-      const stdinText = await helpers.readStdin();
-      await helpers.runExtractionWorkflow(projectRoot, config, stdinText, options);
+      const stdinPayload = await helpers.readStdinPayload();
+      await helpers.runExtractionWorkflow(projectRoot, config, stdinPayload.text, {
+        ...options,
+        sourceBytes: stdinPayload.bytes,
+      });
     });
 
   program;
@@ -43,7 +47,9 @@ export function register(program: Command): void {
         projectRoot,
         config,
         commitContext,
-        options.candidate ? { source: "git-commit", candidate: true } : { source: "git-commit" },
+        options.candidate
+          ? { source: "git-commit", candidate: true, sourceBytes: Buffer.from(commitContext, "utf8") }
+          : { source: "git-commit", sourceBytes: Buffer.from(commitContext, "utf8") },
       );
     });
 
@@ -96,14 +102,18 @@ export function register(program: Command): void {
         const task = options.task?.trim() || undefined;
         const inlineInput = options.input?.trim();
         let sessionSummary: string | undefined;
+        let sessionSourceBytes: Buffer | undefined;
         if (inlineInput) {
           sessionSummary = inlineInput;
+          sessionSourceBytes = Buffer.from(options.input ?? "", "utf8");
         } else if (options.inputFile?.trim()) {
           const inputFilePath = options.inputFile.trim();
           try {
-            const fileContent = await readFile(inputFilePath, "utf8");
+            const fileBytes = await readFile(inputFilePath);
+            const fileContent = decodeStdinBuffer(fileBytes);
             const trimmed = fileContent.trim();
             sessionSummary = trimmed || undefined;
+            sessionSourceBytes = fileBytes;
           } catch (error: unknown) {
             const reason = error instanceof Error && error.message ? error.message : String(error);
             throw new Error(`Failed to read --input-file "${inputFilePath}": ${reason}`, {
@@ -111,7 +121,9 @@ export function register(program: Command): void {
             });
           }
         } else {
-          sessionSummary = (await helpers.readOptionalStdin())?.trim() || undefined;
+          const stdinPayload = await helpers.readOptionalStdinPayload();
+          sessionSummary = stdinPayload?.text.trim() || undefined;
+          sessionSourceBytes = stdinPayload?.bytes;
         }
         const changedFiles = helpers.resolveChangedFiles(projectRoot, options.path);
         const commitContext = await helpers.safeLoadCommitContext(projectRoot, options.rev ?? "HEAD");
@@ -172,6 +184,7 @@ export function register(program: Command): void {
           source: options.source ?? "session",
           ...(resolvedType ? { type: resolvedType } : {}),
           candidate: true,
+          sourceBytes: sessionSourceBytes ?? Buffer.from(rawInput, "utf8"),
         });
 
         const format = helpers.resolveSuggestSkillsOutputFormat(options);

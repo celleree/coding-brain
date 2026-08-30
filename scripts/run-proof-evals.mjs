@@ -12,9 +12,34 @@ const injectPath = path.join(projectRoot, "dist", "inject.js");
 
 await assertBuilt();
 
-const storeApi = await import(pathToFileURL(storeApiPath).href);
+const storeApi = withSourcedWrites(await import(pathToFileURL(storeApiPath).href));
 const { extractMemories } = await import(pathToFileURL(extractPath).href);
 const { buildInjection } = await import(pathToFileURL(injectPath).href);
+
+function withSourcedWrites(api) {
+  return {
+    ...api,
+    saveMemory(memory, projectRoot, provenance) {
+      return api.saveMemory(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+    },
+    savePreference(preference, projectRoot, provenance) {
+      return api.savePreference(
+        preference,
+        projectRoot,
+        provenance ?? {
+          sourceBytes: Buffer.from(preference.reason, "utf8"),
+        },
+      );
+    },
+    applyRoutingFeedback(projectRoot, events, options) {
+      return api.applyRoutingFeedback(
+        projectRoot,
+        events,
+        options ?? { sourceBytes: Buffer.from(JSON.stringify(events), "utf8") },
+      );
+    },
+  };
+}
 
 const config = {
   maxInjectTokens: 1200,
@@ -262,100 +287,94 @@ await runCase(
   },
 );
 
-await runCase(
-  "superseded_preference",
-  "preference with superseded_by does not participate in routing",
-  async () => {
-    await withTempRepo(async (repoRoot) => {
-      await storeApi.saveMemory(
-        {
-          type: "decision",
-          title: "Lint tooling",
-          summary: "ESLint and Prettier both mentioned.",
-          detail: "## DECISION\n\nLint.",
-          tags: ["lint"],
-          importance: "medium",
-          date: "2026-04-03T10:00:00.000Z",
-          status: "active",
-          recommended_skills: ["eslint", "prettier"],
-          skill_trigger_tasks: ["fix lint"],
-          skill_trigger_paths: [".eslintrc.cjs"],
-          invocation_mode: "optional",
-          risk_level: "low",
-        },
-        repoRoot,
-      );
+await runCase("superseded_preference", "preference with superseded_by does not participate in routing", async () => {
+  await withTempRepo(async (repoRoot) => {
+    await storeApi.saveMemory(
+      {
+        type: "decision",
+        title: "Lint tooling",
+        summary: "ESLint and Prettier both mentioned.",
+        detail: "## DECISION\n\nLint.",
+        tags: ["lint"],
+        importance: "medium",
+        date: "2026-04-03T10:00:00.000Z",
+        status: "active",
+        recommended_skills: ["eslint", "prettier"],
+        skill_trigger_tasks: ["fix lint"],
+        skill_trigger_paths: [".eslintrc.cjs"],
+        invocation_mode: "optional",
+        risk_level: "low",
+      },
+      repoRoot,
+    );
 
-      const eslintPath = await storeApi.savePreference(
-        {
-          kind: "routing_preference",
-          target_type: "skill",
-          target: "eslint",
-          preference: "prefer",
-          reason: "legacy: prefer eslint",
-          confidence: 0.9,
-          source: "manual",
-          created_at: "2026-04-03T10:00:00.000Z",
-          updated_at: "2026-04-03T10:00:00.000Z",
-          status: "active",
-        },
-        repoRoot,
-      );
+    const eslintPath = await storeApi.savePreference(
+      {
+        kind: "routing_preference",
+        target_type: "skill",
+        target: "eslint",
+        preference: "prefer",
+        reason: "legacy: prefer eslint",
+        confidence: 0.9,
+        source: "manual",
+        created_at: "2026-04-03T10:00:00.000Z",
+        updated_at: "2026-04-03T10:00:00.000Z",
+        status: "active",
+      },
+      repoRoot,
+    );
 
-      const prettierPath = await storeApi.savePreference(
-        {
-          kind: "routing_preference",
-          target_type: "skill",
-          target: "prettier",
-          preference: "prefer",
-          reason: "team switched to prettier-first formatting",
-          confidence: 0.88,
-          source: "manual",
-          created_at: "2026-04-03T11:00:00.000Z",
-          updated_at: "2026-04-03T11:00:00.000Z",
-          status: "active",
-        },
-        repoRoot,
-      );
+    const prettierPath = await storeApi.savePreference(
+      {
+        kind: "routing_preference",
+        target_type: "skill",
+        target: "prettier",
+        preference: "prefer",
+        reason: "team switched to prettier-first formatting",
+        confidence: 0.88,
+        source: "manual",
+        created_at: "2026-04-03T11:00:00.000Z",
+        updated_at: "2026-04-03T11:00:00.000Z",
+        status: "active",
+      },
+      repoRoot,
+    );
 
-      const records = await storeApi.loadStoredPreferenceRecords(repoRoot);
-      const eslintRecord = records.find((r) => r.filePath === eslintPath);
-      const prettierRel = eslintRecord
-        ? records.find((r) => r.filePath === prettierPath)?.relativePath
-        : null;
-      assert.ok(eslintRecord && prettierRel);
+    const records = await storeApi.loadStoredPreferenceRecords(repoRoot);
+    const eslintRecord = records.find((r) => r.filePath === eslintPath);
+    const prettierRel = eslintRecord ? records.find((r) => r.filePath === prettierPath)?.relativePath : null;
+    assert.ok(eslintRecord && prettierRel);
 
-      await storeApi.overwriteStoredPreference({
-        ...eslintRecord,
-        preference: {
-          ...eslintRecord.preference,
-          status: "active",
-          superseded_by: prettierRel,
-          updated_at: new Date().toISOString(),
-        },
-      });
-
-      const routed = await storeApi.buildSkillShortlist(repoRoot, {
-        task: "fix lint in config",
-        paths: [".eslintrc.cjs"],
-        path_source: "explicit",
-      });
-
-      const skipped = routed.routing_explanation?.notes.filter((n) => n.includes("eslint")) ?? [];
-      assert.ok(
-        skipped.some((n) => n.includes("superseded") || n.toLowerCase().includes("skipped preference")),
-        "expected skipped superseded eslint preference in routing notes",
-      );
-      assert.ok(
-        !routed.resolved_skills
-          .find((s) => s.skill === "eslint")
-          ?.sources.some((s) => s.relation === "preference_prefer"),
-        "superseded eslint prefer should not apply",
-      );
-      metrics.stale_superseded_filter.superseded_preference_skipped = true;
+    await storeApi.overwriteStoredPreference({
+      ...eslintRecord,
+      preference: {
+        ...eslintRecord.preference,
+        status: "active",
+        superseded_by: prettierRel,
+        updated_at: new Date().toISOString(),
+      },
     });
-  },
-);
+
+    const routed = await storeApi.buildSkillShortlist(repoRoot, {
+      task: "fix lint in config",
+      paths: [".eslintrc.cjs"],
+      path_source: "explicit",
+    });
+
+    const skipped = routed.routing_explanation?.notes.filter((n) => n.includes("eslint")) ?? [];
+    assert.ok(
+      skipped.some((n) => n.includes("superseded") || n.toLowerCase().includes("skipped preference")),
+      "expected skipped superseded eslint preference in routing notes",
+    );
+    assert.ok(
+      !routed.resolved_skills
+        .find((s) => s.skill === "eslint")
+        ?.sources.some((s) => s.relation === "preference_prefer"),
+      "superseded eslint prefer should not apply",
+    );
+    metrics.stale_superseded_filter.superseded_preference_skipped = true;
+  });
+});
 
 await runCase(
   "session_profile_routing",
@@ -395,36 +414,32 @@ await runCase(
   },
 );
 
-await runCase(
-  "session_pollution",
-  "writing session profile does not add durable memory files",
-  async () => {
-    await withTempRepo(async (repoRoot) => {
-      await storeApi.saveMemory(
-        {
-          type: "decision",
-          title: "Durable only",
-          summary: "x",
-          detail: "## DECISION\n\nx",
-          tags: [],
-          importance: "low",
-          date: "2026-04-03T10:00:00.000Z",
-          status: "active",
-        },
-        repoRoot,
-      );
+await runCase("session_pollution", "writing session profile does not add durable memory files", async () => {
+  await withTempRepo(async (repoRoot) => {
+    await storeApi.saveMemory(
+      {
+        type: "decision",
+        title: "Durable only",
+        summary: "x",
+        detail: "## DECISION\n\nx",
+        tags: [],
+        importance: "low",
+        date: "2026-04-03T10:00:00.000Z",
+        status: "active",
+      },
+      repoRoot,
+    );
 
-      const before = await storeApi.loadStoredMemoryRecords(repoRoot);
-      await writeSessionProfile(repoRoot, {
-        hints: ["ephemeral scratch note that must not become a memory"],
-        skill_routing: [{ skill: "vitest", preference: "prefer" }],
-      });
-      const after = await storeApi.loadStoredMemoryRecords(repoRoot);
-      assert.equal(after.length, before.length);
-      metrics.session_pollution.memory_unchanged_after_session_write = true;
+    const before = await storeApi.loadStoredMemoryRecords(repoRoot);
+    await writeSessionProfile(repoRoot, {
+      hints: ["ephemeral scratch note that must not become a memory"],
+      skill_routing: [{ skill: "vitest", preference: "prefer" }],
     });
-  },
-);
+    const after = await storeApi.loadStoredMemoryRecords(repoRoot);
+    assert.equal(after.length, before.length);
+    metrics.session_pollution.memory_unchanged_after_session_write = true;
+  });
+});
 
 await runCase(
   "routing_feedback_loop",

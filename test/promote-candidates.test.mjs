@@ -12,8 +12,12 @@ import {
   loadStoredMemoryRecords,
   looksTemporary,
   reviewCandidateMemory,
-  saveMemory,
+  saveMemory as saveMemoryRecord,
 } from "../dist/store-api.js";
+
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
 
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, "dist", "cli.js");

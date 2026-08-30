@@ -17,7 +17,32 @@ const outputRoot = path.resolve(readFlagValue("--output-dir") ?? defaultOut);
 const storeApiPath = path.join(projectRoot, "dist", "store-api.js");
 
 await assertDistBuilt();
-const storeApi = await import(pathToFileURL(storeApiPath).href);
+const storeApi = withSourcedWrites(await import(pathToFileURL(storeApiPath).href));
+
+function withSourcedWrites(api) {
+  return {
+    ...api,
+    saveMemory(memory, projectRoot, provenance) {
+      return api.saveMemory(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+    },
+    savePreference(preference, projectRoot, provenance) {
+      return api.savePreference(
+        preference,
+        projectRoot,
+        provenance ?? {
+          sourceBytes: Buffer.from(preference.reason, "utf8"),
+        },
+      );
+    },
+    applyRoutingFeedback(projectRoot, events, options) {
+      return api.applyRoutingFeedback(
+        projectRoot,
+        events,
+        options ?? { sourceBytes: Buffer.from(JSON.stringify(events), "utf8") },
+      );
+    },
+  };
+}
 
 await rm(outputRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 await mkdir(outputRoot, { recursive: true });
@@ -131,7 +156,9 @@ async function buildTypeScriptCliBundle(outDir) {
 
     await writeSessionProfile(tmp, {
       hints: ["This session: prioritize checklist over extra smoke scripts."],
-      skill_routing: [{ skill: "npm-install-smoke", preference: "prefer", reason: "temporary: reproduce customer install bug" }],
+      skill_routing: [
+        { skill: "npm-install-smoke", preference: "prefer", reason: "temporary: reproduce customer install bug" },
+      ],
     });
 
     const routeWithSession = await storeApi.buildSkillShortlist(tmp, {
@@ -315,7 +342,9 @@ async function buildFullstackWebBundle(outDir) {
     });
 
     await writeSessionProfile(tmp, {
-      skill_routing: [{ skill: "eslint", preference: "prefer", reason: "hotfix session: must run eslint on touched files" }],
+      skill_routing: [
+        { skill: "eslint", preference: "prefer", reason: "hotfix session: must run eslint on touched files" },
+      ],
     });
 
     const routeSession = await storeApi.buildSkillShortlist(tmp, {
@@ -342,9 +371,21 @@ async function buildFullstackWebBundle(outDir) {
     }
 
     await writeFile(path.join(outDir, "preference-capture-output.txt"), nlLines.join("\n").trim() + "\n", "utf8");
-    await writeFile(path.join(outDir, "route-before.json"), JSON.stringify(slimRoute(routeBefore), null, 2) + "\n", "utf8");
-    await writeFile(path.join(outDir, "route-after.json"), JSON.stringify(slimRoute(routeAfter), null, 2) + "\n", "utf8");
-    await writeFile(path.join(outDir, "route-with-session.json"), JSON.stringify(slimRoute(routeSession), null, 2) + "\n", "utf8");
+    await writeFile(
+      path.join(outDir, "route-before.json"),
+      JSON.stringify(slimRoute(routeBefore), null, 2) + "\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(outDir, "route-after.json"),
+      JSON.stringify(slimRoute(routeAfter), null, 2) + "\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(outDir, "route-with-session.json"),
+      JSON.stringify(slimRoute(routeSession), null, 2) + "\n",
+      "utf8",
+    );
     await writeFile(
       path.join(outDir, "timeline-output.txt"),
       "Single active memory (no supersedes chain in this bundle).\nSee route JSON for skill_evidence and routing_explanation.\n",

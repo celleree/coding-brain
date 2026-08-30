@@ -4,7 +4,8 @@ import path from "node:path";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { expect, it } from "vitest";
 
-import { initBrain, saveMemory, loadStoredMemoryRecords } from "../dist/store-api.js";
+import { initBrain, loadStoredMemoryRecords } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, "dist", "cli.js");

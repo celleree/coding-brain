@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { stdout as output } from "node:process";
 
 import { BrainUserError } from "../errors.js";
+import { decodeStdinBuffer } from "../stdin-decode.js";
 import { parseRuleFileToMemories } from "../import.js";
 import { reviewCandidateMemory } from "../reviewer.js";
 import { initBrain, loadStoredMemoryRecords, saveMemory, updateIndex } from "../store.js";
@@ -69,9 +70,9 @@ async function importRuleFiles(
   let written = 0;
 
   for (const file of files) {
-    const content = await readRuleFile(file);
+    const source = await readRuleFile(file);
     const parsedMemories = parseRuleFileToMemories(
-      content,
+      source.text,
       file,
       forcedType ? { defaultType: forcedType } : undefined,
     ).map((memory) => applyForcedType(memory, forcedType));
@@ -104,7 +105,9 @@ async function importRuleFiles(
         continue;
       }
 
-      const savedPath = await saveMemory({ ...memory, status: "candidate" }, projectRoot);
+      const savedPath = await saveMemory({ ...memory, status: "candidate" }, projectRoot, {
+        sourceBytes: source.bytes,
+      });
       written += 1;
       existingRecords = await loadStoredMemoryRecords(projectRoot);
       entries.push({
@@ -128,9 +131,10 @@ async function importRuleFiles(
   };
 }
 
-async function readRuleFile(filePath: string): Promise<string> {
+async function readRuleFile(filePath: string): Promise<{ bytes: Buffer; text: string }> {
   try {
-    return await readFile(filePath, "utf8");
+    const bytes = await readFile(filePath);
+    return { bytes, text: decodeStdinBuffer(bytes) };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     throw new BrainUserError(`Failed to read import file "${filePath}": ${message}`);

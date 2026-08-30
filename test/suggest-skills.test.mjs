@@ -3,14 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import {
-  buildSkillShortlist,
-  collectGitDiffPaths,
-  initBrain,
-  renderSkillShortlistJson,
-  saveMemory,
-} from "../dist/store-api.js";
+import { buildSkillShortlist, collectGitDiffPaths, initBrain, renderSkillShortlistJson } from "../dist/store-api.js";
 import { renderSkillShortlist } from "../dist/suggest-skills.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 await runTest("suggest-skills renders a markdown routing plan from matched active memories", async () => {
   await withTempRepo(async (projectRoot) => {

@@ -1,8 +1,16 @@
-import { mkdir, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { getBrainDir } from "./config.js";
-import { loadStoredMemoryRecords, overwriteStoredMemory, updateIndex } from "./store.js";
+import {
+  attestMemoryRecord,
+  loadStoredMemoryRecords,
+  overwriteStoredMemory,
+  parseMemory,
+  serializeMemory,
+  updateIndex,
+  verifyMemoryProvenance,
+} from "./store.js";
 import type { BrainConfig, Importance, StoredMemoryRecord } from "./types.js";
 
 const IMPORTANCE_DOWNGRADE: Record<Exclude<Importance, "low">, Importance> = {
@@ -187,7 +195,7 @@ export async function downgradeStaleMemory(candidate: StaleMemoryCandidate, toda
     memory: {
       ...candidate.record.memory,
       importance: candidate.nextImportance,
-      detail: appendSweepAnnotation(candidate.record.memory.detail, today, candidate.staleDays),
+      updated: today,
     },
   });
 }
@@ -195,15 +203,28 @@ export async function downgradeStaleMemory(candidate: StaleMemoryCandidate, toda
 export async function archiveGoalMemory(projectRoot: string, candidate: ArchiveGoalCandidate): Promise<string> {
   const archiveDir = path.join(getBrainDir(projectRoot), "archive");
   await mkdir(archiveDir, { recursive: true });
+  const currentMemory = parseMemory(await readFile(candidate.record.filePath, "utf8"), candidate.record.filePath);
+  const provenance = await verifyMemoryProvenance(projectRoot, currentMemory, candidate.record.relativePath);
+  if (!provenance.ok) {
+    throw new Error(`Cannot archive goal with invalid provenance: ${provenance.reason}.`);
+  }
 
   const parsed = path.parse(candidate.record.filePath);
   let attempt = 0;
   while (attempt < 1000) {
     const nextName = attempt === 0 ? parsed.base : `${parsed.name}-${attempt}${parsed.ext}`;
     const targetPath = path.join(archiveDir, nextName);
+    const targetRelativePath = path.relative(projectRoot, targetPath);
+    const archivedContent = serializeMemory(attestMemoryRecord(currentMemory, targetRelativePath));
 
     try {
-      await rename(candidate.record.filePath, targetPath);
+      await writeFile(targetPath, archivedContent, { encoding: "utf8", flag: "wx" });
+      try {
+        await rm(candidate.record.filePath);
+      } catch (error) {
+        await rm(targetPath, { force: true }).catch(() => undefined);
+        throw error;
+      }
       return targetPath;
     } catch (error) {
       if (isFileAlreadyExistsError(error)) {
@@ -300,12 +321,6 @@ export function previewMemoryLines(record: StoredMemoryRecord, maxLines = 3): st
 export function toDisplayPath(record: StoredMemoryRecord, includeBrainRoot = true): string {
   const normalized = record.relativePath.replace(/\\/g, "/");
   return includeBrainRoot ? normalized : normalized.replace(/^\.brain\//, "");
-}
-
-function appendSweepAnnotation(detail: string, today: string, staleDays: number): string {
-  const trimmed = detail.trimEnd();
-  const annotation = `<!-- brain-sweep: ${today} 超过 ${staleDays} 天未更新，importance 已降权 -->`;
-  return `${trimmed}\n\n${annotation}`;
 }
 
 function diffDays(fromDate: string, toDate: string): number {

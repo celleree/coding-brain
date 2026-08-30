@@ -21,7 +21,7 @@ import {
   parseRoutingFeedbackStdin,
   renderExplainRoutingFeedbackText,
 } from "../routing-feedback.js";
-import { initBrain, updateIndex } from "../store.js";
+import { initBrain, persistSourceBytes, updateIndex } from "../store.js";
 import { buildRoutingInspectorViewModel } from "../tui/adapters/routing.js";
 import * as helpers from "./helpers.js";
 
@@ -212,9 +212,10 @@ export function register(program: Command): void {
         return;
       }
 
-      const stdinText = await helpers.readStdin();
-      const events = parseRoutingFeedbackStdin(stdinText);
-      const applied = await applyRoutingFeedback(projectRoot, events);
+      const stdinPayload = await helpers.readStdinPayload();
+      const events = parseRoutingFeedbackStdin(stdinPayload.text);
+      const sourceEpisode = await persistSourceBytes(projectRoot, stdinPayload.bytes);
+      const applied = await applyRoutingFeedback(projectRoot, events, { sourceEpisode });
       await updateIndex(projectRoot);
 
       if (options.json) {

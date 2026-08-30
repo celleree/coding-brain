@@ -111,8 +111,10 @@ export interface Memory {
   supersession_reason?: string | null;
   /** Confidence for ranking / routing signals, 0–1. Default 1. */
   confidence?: number;
-  /** Optional session id, transcript id, or git ref for provenance. */
+  /** SHA-256 identity of the preserved raw source bytes shared by records from one episode. */
   source_episode?: string;
+  /** SHA-256 attestation of the normalized persisted record and its .brain-relative path. */
+  record_digest?: string;
   /** Review queue state; `pending_review` excludes inject / routing. */
   review_state?: ReviewState;
 }
@@ -165,7 +167,10 @@ export interface Preference {
   path_hints?: string[];
   observed_at?: string;
   supersession_reason?: string | null;
+  /** SHA-256 identity of the preserved raw source bytes shared by records from one episode. */
   source_episode?: string;
+  /** SHA-256 attestation of the normalized persisted record and its .brain-relative path. */
+  record_digest?: string;
   review_state?: ReviewState;
 }
 
@@ -306,7 +311,9 @@ export interface MemorySchemaIssue {
     | "conflict_field"
     | "meaningless_scope"
     | "missing_skill_metadata"
-    | "duplicate_skill_metadata";
+    | "duplicate_skill_metadata"
+    | "missing_provenance"
+    | "invalid_provenance";
   severity: MemorySchemaIssueSeverity;
   field?: string;
   message: string;

@@ -9,10 +9,10 @@ import {
   loadConfig,
   renderTaskRoutingBundleJson,
   resolveSuggestedSkillPaths,
-  saveMemory,
   shouldEscalateRoutingPlan,
   summarizeRoutingEscalation,
 } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 await runTest("task routing returns a combined bundle", async () => {
   await withTempRepo(async (projectRoot) => {

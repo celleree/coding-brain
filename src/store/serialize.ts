@@ -89,6 +89,7 @@ export function serializeMemory(memory: Memory): string {
     frontmatter.confidence = normalizedMemory.confidence ?? DEFAULT_MEMORY_CONFIDENCE;
   }
   if (normalizedMemory.source_episode) frontmatter.source_episode = normalizedMemory.source_episode;
+  if (normalizedMemory.record_digest) frontmatter.record_digest = normalizedMemory.record_digest;
   if ((normalizedMemory.review_state ?? DEFAULT_REVIEW_STATE) !== DEFAULT_REVIEW_STATE) {
     frontmatter.review_state = normalizedMemory.review_state ?? DEFAULT_REVIEW_STATE;
   }
@@ -149,6 +150,7 @@ export function parseMemory(content: string, filePath: string): Memory {
     ...(frontmatter.supersession_reason !== undefined ? { supersession_reason: frontmatter.supersession_reason } : {}),
     ...(frontmatter.confidence !== undefined ? { confidence: frontmatter.confidence } : {}),
     ...(frontmatter.source_episode ? { source_episode: frontmatter.source_episode } : {}),
+    ...(frontmatter.record_digest ? { record_digest: frontmatter.record_digest } : {}),
     ...(frontmatter.review_state ? { review_state: frontmatter.review_state as ReviewState } : {}),
   };
   if (frontmatter.invocation_mode) {
@@ -210,6 +212,7 @@ export function parseFrontmatter(raw: string): {
   observed_at?: string;
   supersession_reason?: string | null;
   source_episode?: string;
+  record_digest?: string;
   review_state?: string;
 } {
   const result: ReturnType<typeof parseFrontmatter> = {
@@ -255,6 +258,7 @@ export function parseFrontmatter(raw: string): {
   assignIfDefined(result, "updated_at", toOptionalString(parsed.updated_at));
   assignIfDefined(result, "observed_at", toOptionalString(parsed.observed_at));
   assignIfDefined(result, "source_episode", toOptionalString(parsed.source_episode));
+  assignIfDefined(result, "record_digest", toOptionalString(parsed.record_digest));
   assignIfDefined(result, "review_state", toOptionalString(parsed.review_state));
   assignIfDefined(result, "score", toOptionalNumber(parsed.score));
   assignIfDefined(result, "hit_count", toOptionalNumber(parsed.hit_count));

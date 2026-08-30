@@ -4,7 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { initBrain, saveMemory } from "../dist/store-api.js";
+import { initBrain } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, "dist", "cli.js");

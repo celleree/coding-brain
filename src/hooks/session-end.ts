@@ -14,6 +14,7 @@ import {
   getMemoryStatus,
   initBrain,
   loadStoredMemoryRecords,
+  persistSourceBytes,
   saveMemory,
   updateIndex,
 } from "../store.js";
@@ -26,7 +27,8 @@ async function main(): Promise<void> {
     await initBrain(projectRoot);
     const config = await loadConfig(projectRoot);
     renderConfigWarnings(config).forEach((warning) => debugLog(warning));
-    const summary = await readStdin();
+    const payload = await readStdin();
+    const summary = payload.text;
 
     if (!summary.trim()) {
       return;
@@ -35,6 +37,7 @@ async function main(): Promise<void> {
     if (config.triggerMode === "manual") {
       return;
     }
+    const sourceEpisode = await persistSourceBytes(projectRoot, payload.bytes);
 
     const memories = await extractMemories(summary, config, projectRoot);
     const existingRecords = await loadStoredMemoryRecords(projectRoot);
@@ -54,7 +57,7 @@ async function main(): Promise<void> {
         ...(memory.source ? {} : { source: "session" }),
         ...(useCandidate ? { status: "candidate" as const } : { status: "active" as const }),
       };
-      await saveMemory(toSave, projectRoot);
+      await saveMemory({ ...toSave, source_episode: sourceEpisode }, projectRoot, { sourceBytes: payload.bytes });
 
       if (review.decision !== "accept") {
         debugLog(
@@ -91,7 +94,7 @@ async function main(): Promise<void> {
         filePath: entry.filePath,
         relativePath: entry.relativePath,
       })),
-    );
+    ).map((event) => ({ ...event, source_episode: sourceEpisode }));
     if (failureEvents.length > 0) {
       await savePendingReinforcementEvents(projectRoot, failureEvents);
       debugLog(`Queued ${failureEvents.length} reinforcement suggestion(s) for later review.`);
@@ -104,14 +107,15 @@ async function main(): Promise<void> {
   }
 }
 
-async function readStdin(): Promise<string> {
+async function readStdin(): Promise<{ bytes: Buffer; text: string }> {
   const chunks: Buffer[] = [];
 
   for await (const chunk of input) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
 
-  return decodeStdinBuffer(Buffer.concat(chunks));
+  const bytes = Buffer.concat(chunks);
+  return { bytes, text: decodeStdinBuffer(bytes) };
 }
 
 function debugLog(message: string): void {

@@ -7,6 +7,7 @@ import {
   loadStoredMemoryRecordsByBrainRelativePaths,
   recordInjectedMemories,
   serializeMemory,
+  verifyMemoryProvenance,
 } from "./store.js";
 import { isMemoryCurrentlyValid } from "./temporal.js";
 import {
@@ -88,11 +89,18 @@ export async function buildInjection(
   const gitContext = rawOptions.noContext
     ? { changedFiles: [], branchName: "" }
     : (rawOptions.gitContext ?? getGitContext(projectRoot));
-  const injectionData = await loadInjectionData(projectRoot, options, gitContext, {
+  const loadedInjectionData = await loadInjectionData(projectRoot, options, gitContext, {
     includeWorking: Boolean(rawOptions.includeWorking),
     noContext: Boolean(rawOptions.noContext),
     requestedIds,
   });
+  const provenanceGate = await gateInjectionData(projectRoot, loadedInjectionData);
+  if (requestedIds.length > 0 && provenanceGate.rejectedPaths.length > 0) {
+    throw new Error(
+      `Requested memory is not injectable because provenance verification failed: ${provenanceGate.rejectedPaths.join(", ")}`,
+    );
+  }
+  const injectionData = provenanceGate.data;
 
   const activeRecords = buildInjectablePool(injectionData.allRecords, Boolean(rawOptions.includeWorking));
   emitLineageWarnings(activeRecords);
@@ -173,6 +181,43 @@ export async function buildInjection(
       ? [renderExplainComment(selected, config.injectExplainMaxItems ?? 4)]
       : []),
   ].join("\n");
+}
+
+async function gateInjectionData(
+  projectRoot: string,
+  data: InjectionDataSet,
+): Promise<{ data: InjectionDataSet; rejectedPaths: string[] }> {
+  const rejectedPaths: string[] = [];
+  const verifiedRecords: StoredMemoryRecord[] = [];
+  for (const record of data.allRecords) {
+    if (getMemoryStatus(record.memory) !== "active") {
+      verifiedRecords.push(record);
+      continue;
+    }
+    const verification = await verifyMemoryProvenance(projectRoot, record.memory, record.relativePath);
+    if (verification.ok) verifiedRecords.push(record);
+    else rejectedPaths.push(record.relativePath.replace(/\\/g, "/"));
+  }
+
+  const selectedFromIds = data.selectedFromIds
+    ? (
+        await Promise.all(
+          data.selectedFromIds.map(async (entry) => {
+            const verification = await verifyMemoryProvenance(projectRoot, entry.memory, entry.relativePath);
+            if (!verification.ok) {
+              rejectedPaths.push(entry.relativePath.replace(/\\/g, "/"));
+              return null;
+            }
+            return entry;
+          }),
+        )
+      ).filter((entry): entry is RankedMemory => entry !== null)
+    : null;
+
+  return {
+    data: { ...data, allRecords: verifiedRecords, selectedFromIds },
+    rejectedPaths: Array.from(new Set(rejectedPaths)),
+  };
 }
 
 async function loadInjectionData(

@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { buildInjection } from "../dist/inject.js";
-import { initBrain, loadStoredMemoryRecords, saveMemory, updateIndex } from "../dist/store-api.js";
+import { initBrain, loadStoredMemoryRecords, saveMemory as saveMemoryRecord, updateIndex } from "../dist/store-api.js";
+
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
 
 const DEFAULT_BRAIN_CONFIG = {
   workflowMode: "recommended-semi-auto",
@@ -1007,6 +1011,36 @@ await runTest("inject elevates high-risk fix memories across modules and shows t
     );
     assert.match(injection, /risk_adjustment=8 \(risk=high\)/);
     assert.match(injection, /Task Phrase Match: fix refund transaction bug/);
+  });
+});
+
+await runTest("inject excludes active memories whose record attestation no longer verifies", async () => {
+  await withTempRepo(async (projectRoot) => {
+    const filePath = await saveMemory(
+      {
+        type: "decision",
+        title: "Attested injection rule",
+        summary: "This should disappear after manual tampering.",
+        detail: "## DECISION\n\nOnly verified records may be injected.",
+        tags: ["provenance"],
+        importance: "high",
+        date: "2026-08-29T12:00:00.000Z",
+        score: 90,
+        hit_count: 0,
+        last_used: null,
+        created_at: "2026-08-29T12:00:00.000Z",
+        stale: false,
+        source: "manual",
+        status: "active",
+      },
+      projectRoot,
+      { sourceBytes: Buffer.from("verified source", "utf8") },
+    );
+    const raw = await readFile(filePath, "utf8");
+    await writeFile(filePath, raw.replace("Only verified records", "Tampered records"), "utf8");
+
+    const injection = await buildInjection(projectRoot, DEFAULT_BRAIN_CONFIG, { noContext: true });
+    assert.doesNotMatch(injection, /Attested injection rule/);
   });
 });
 

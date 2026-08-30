@@ -42,6 +42,7 @@ export async function runExtractionWorkflow(
     source: Memory["source"];
     type?: MemoryType;
     candidate?: boolean;
+    sourceBytes?: Uint8Array;
   },
 ): Promise<string[]> {
   const memories = (await extractMemories(rawInput, config, projectRoot)).map((memory) =>
@@ -74,6 +75,7 @@ export async function runExtractionWorkflow(
           }
         : toSave,
       projectRoot,
+      { sourceBytes: options.sourceBytes ?? Buffer.from(rawInput, "utf8") },
     );
     savedPaths.push(savedPath);
 
@@ -114,14 +116,24 @@ export async function runExtractionWorkflow(
   return savedPaths;
 }
 
-export async function readStdin(): Promise<string> {
+export interface RawTextPayload {
+  bytes: Buffer;
+  text: string;
+}
+
+export async function readStdinPayload(): Promise<RawTextPayload> {
   const chunks: Buffer[] = [];
 
   for await (const chunk of input) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
 
-  return decodeStdinBuffer(Buffer.concat(chunks));
+  const bytes = Buffer.concat(chunks);
+  return { bytes, text: decodeStdinBuffer(bytes) };
+}
+
+export async function readStdin(): Promise<string> {
+  return (await readStdinPayload()).text;
 }
 
 export async function runSweepAuto(
@@ -467,12 +479,16 @@ export async function buildWorkflowSnapshot(
 }
 
 export async function readOptionalStdin(): Promise<string | undefined> {
+  return (await readOptionalStdinPayload())?.text.trim() || undefined;
+}
+
+export async function readOptionalStdinPayload(): Promise<RawTextPayload | undefined> {
   if (input.isTTY) {
     return undefined;
   }
 
   const STDIN_TIMEOUT_MS = 200;
-  const result = await new Promise<string | undefined>((resolve) => {
+  return new Promise<RawTextPayload | undefined>((resolve) => {
     const chunks: Buffer[] = [];
     let settled = false;
 
@@ -484,7 +500,8 @@ export async function readOptionalStdin(): Promise<string | undefined> {
         input.removeAllListeners("error");
         input.pause();
         input.destroy();
-        resolve(chunks.length > 0 ? decodeStdinBuffer(Buffer.concat(chunks)) : undefined);
+        const bytes = Buffer.concat(chunks);
+        resolve(chunks.length > 0 ? { bytes, text: decodeStdinBuffer(bytes) } : undefined);
       }
     }, STDIN_TIMEOUT_MS);
 
@@ -496,7 +513,8 @@ export async function readOptionalStdin(): Promise<string | undefined> {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(chunks.length > 0 ? decodeStdinBuffer(Buffer.concat(chunks)) : undefined);
+        const bytes = Buffer.concat(chunks);
+        resolve(chunks.length > 0 ? { bytes, text: decodeStdinBuffer(bytes) } : undefined);
       }
     });
 
@@ -510,9 +528,6 @@ export async function readOptionalStdin(): Promise<string | undefined> {
 
     input.resume();
   });
-
-  const trimmed = result?.trim();
-  return trimmed || undefined;
 }
 
 export async function resolveProjectRoot(): Promise<string> {

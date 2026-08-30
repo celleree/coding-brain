@@ -16,9 +16,34 @@ const injectPath = path.join(projectRoot, "dist", "inject.js");
 
 await assertDistBuilt();
 
-const storeApi = await import(pathToFileURL(storeApiPath).href);
+const storeApi = withSourcedWrites(await import(pathToFileURL(storeApiPath).href));
 const { extractMemories } = await import(pathToFileURL(extractPath).href);
 const { buildInjection } = await import(pathToFileURL(injectPath).href);
+
+function withSourcedWrites(api) {
+  return {
+    ...api,
+    saveMemory(memory, projectRoot, provenance) {
+      return api.saveMemory(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+    },
+    savePreference(preference, projectRoot, provenance) {
+      return api.savePreference(
+        preference,
+        projectRoot,
+        provenance ?? {
+          sourceBytes: Buffer.from(preference.reason, "utf8"),
+        },
+      );
+    },
+    applyRoutingFeedback(projectRoot, events, options) {
+      return api.applyRoutingFeedback(
+        projectRoot,
+        events,
+        options ?? { sourceBytes: Buffer.from(JSON.stringify(events), "utf8") },
+      );
+    },
+  };
+}
 
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-demo-proof-"));
 const sampleRepo = path.join(tempRoot, "typescript-cli-demo");
@@ -36,12 +61,15 @@ try {
   await seedTypeScriptCliRepo(sampleRepo);
 
   const setupResult = await storeApi.setupRepoBrain(sampleRepo, { gitHook: false });
-  const setupOutput = sanitizeText([
-    `Initialized RepoBrain in ${sampleRepo}`,
-    `- Brain directory: ${setupResult.brainDir}`,
-    `- ${setupResult.gitHook.message}`,
-    '- Next step: run "brain inject" at session start, or wire it into your agent hook.',
-  ].join("\n"), sampleRepo);
+  const setupOutput = sanitizeText(
+    [
+      `Initialized RepoBrain in ${sampleRepo}`,
+      `- Brain directory: ${setupResult.brainDir}`,
+      `- ${setupResult.gitHook.message}`,
+      '- Next step: run "brain inject" at session start, or wire it into your agent hook.',
+    ].join("\n"),
+    sampleRepo,
+  );
 
   const sessionSummary = [
     "gotcha: Normalize CLI env booleans in src/config.ts before Commander validation",
@@ -74,23 +102,29 @@ try {
     candidateIds.push(path.basename(savedPath, ".md"));
   }
 
-  const extractOutput = sanitizeText([
-    `Reviewed ${candidateReviews.length} extracted memory.`,
-    ...candidateReviews.map((entry) =>
-      `- ${entry.memory.title} | decision=${entry.review.decision} | reason=${entry.review.reason}`,
-    ),
-    `Saved ${candidateReviews.length} memory as candidates.`,
-  ].join("\n"), sampleRepo);
+  const extractOutput = sanitizeText(
+    [
+      `Reviewed ${candidateReviews.length} extracted memory.`,
+      ...candidateReviews.map(
+        (entry) => `- ${entry.memory.title} | decision=${entry.review.decision} | reason=${entry.review.reason}`,
+      ),
+      `Saved ${candidateReviews.length} memory as candidates.`,
+    ].join("\n"),
+    sampleRepo,
+  );
 
   const reviewRecords = await storeApi.loadStoredMemoryRecords(sampleRepo);
   const candidateRecords = reviewRecords.filter((entry) => entry.memory.status === "candidate");
-  const reviewOutput = sanitizeText([
-    `Candidate memories: ${candidateRecords.length}`,
-    ...candidateRecords.map(
-      (entry) =>
-        `- ${path.basename(entry.filePath, ".md")} | ${entry.memory.type} | ${entry.memory.importance} | ${entry.memory.title}`,
-    ),
-  ].join("\n"), sampleRepo);
+  const reviewOutput = sanitizeText(
+    [
+      `Candidate memories: ${candidateRecords.length}`,
+      ...candidateRecords.map(
+        (entry) =>
+          `- ${path.basename(entry.filePath, ".md")} | ${entry.memory.type} | ${entry.memory.importance} | ${entry.memory.title}`,
+      ),
+    ].join("\n"),
+    sampleRepo,
+  );
 
   const approvedCount = await approveCandidates(candidateRecords);
   await storeApi.updateIndex(sampleRepo);
@@ -100,7 +134,8 @@ try {
     {
       type: "decision",
       title: "Release changes should start with checklist and install smoke validation",
-      summary: "First-release work should route through the release checklist and packaged install smoke validation before publish.",
+      summary:
+        "First-release work should route through the release checklist and packaged install smoke validation before publish.",
       detail: [
         "## DECISION",
         "",
@@ -124,18 +159,25 @@ try {
     sampleRepo,
   );
 
-  const injectOutput = sanitizeText(await buildInjection(sampleRepo, config, {
-    task: "tighten config parsing for npm release smoke validation",
-    paths: ["src/config.ts", "src/cli.ts"],
-    modules: ["cli"],
-  }), sampleRepo);
+  const injectOutput = sanitizeText(
+    await buildInjection(sampleRepo, config, {
+      task: "tighten config parsing for npm release smoke validation",
+      paths: ["src/config.ts", "src/cli.ts"],
+      modules: ["cli"],
+    }),
+    sampleRepo,
+  );
 
   const suggestResult = await storeApi.buildSkillShortlist(sampleRepo, {
     task: "prepare first npm release smoke validation",
     paths: ["package.json", "docs/release-checklist.md"],
   });
   const suggestMarkdown = sanitizeText(storeApi.renderSkillShortlist(suggestResult), sampleRepo);
-  const suggestJson = JSON.stringify(sanitizeJson(JSON.parse(storeApi.renderSkillShortlistJson(suggestResult)), sampleRepo), null, 2);
+  const suggestJson = JSON.stringify(
+    sanitizeJson(JSON.parse(storeApi.renderSkillShortlistJson(suggestResult)), sampleRepo),
+    null,
+    2,
+  );
 
   const brainFiles = await collectBrainFiles(sampleRepo);
   const transcript = renderTranscript({
@@ -175,11 +217,7 @@ try {
 
 async function assertDistBuilt() {
   try {
-    await Promise.all([
-      readFile(storeApiPath, "utf8"),
-      readFile(extractPath, "utf8"),
-      readFile(injectPath, "utf8"),
-    ]);
+    await Promise.all([readFile(storeApiPath, "utf8"), readFile(extractPath, "utf8"), readFile(injectPath, "utf8")]);
   } catch {
     throw new Error('Build output missing. Run "npm run build" before generating demo proof assets.');
   }
@@ -236,7 +274,7 @@ async function seedTypeScriptCliRepo(sampleRepo) {
       "",
       "export function loadConfig(env: NodeJS.ProcessEnv): CliConfig {",
       "  return {",
-      "    dryRun: env.DRY_RUN === \"true\",",
+      '    dryRun: env.DRY_RUN === "true",',
       "  };",
       "}",
       "",
@@ -247,10 +285,10 @@ async function seedTypeScriptCliRepo(sampleRepo) {
   await writeFile(
     path.join(sampleRepo, "src", "cli.ts"),
     [
-      "import { loadConfig } from \"./config.js\";",
+      'import { loadConfig } from "./config.js";',
       "",
       "const config = loadConfig(process.env);",
-      "console.log(config.dryRun ? \"dry\" : \"live\");",
+      'console.log(config.dryRun ? "dry" : "live");',
       "",
     ].join("\n"),
     "utf8",
@@ -285,9 +323,7 @@ async function approveCandidates(candidateRecords) {
   for (const entry of candidateRecords) {
     const review = storeApi.reviewCandidateMemory(
       entry.memory,
-      candidateRecords
-        .filter((record) => record.filePath !== entry.filePath)
-        .map((record) => record),
+      candidateRecords.filter((record) => record.filePath !== entry.filePath).map((record) => record),
     );
     assert.equal(review.decision, "accept");
     assert.equal(review.reason, "novel_memory");
@@ -390,9 +426,7 @@ async function collectBrainFiles(projectRoot) {
   const root = path.join(projectRoot, ".brain");
   const result = [];
   await walk(root, result);
-  return result
-    .map((entry) => path.relative(projectRoot, entry))
-    .sort((left, right) => left.localeCompare(right));
+  return result.map((entry) => path.relative(projectRoot, entry)).sort((left, right) => left.localeCompare(right));
 }
 
 async function walk(currentPath, result) {
@@ -433,9 +467,7 @@ function sanitizeJson(value, sampleRepo) {
   }
 
   if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, sanitizeJson(entry, sampleRepo)]),
-    );
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, sanitizeJson(entry, sampleRepo)]));
   }
 
   return value;

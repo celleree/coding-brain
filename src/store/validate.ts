@@ -259,6 +259,7 @@ export function normalizeMemory(memory: Memory): Memory {
     confidence,
     review_state,
     ...(memory.source_episode?.trim() ? { source_episode: memory.source_episode.trim() } : {}),
+    ...(memory.record_digest?.trim() ? { record_digest: memory.record_digest.trim() } : {}),
     ...(memory.area ? { area: memory.area } : {}),
     ...(expires ? { expires } : {}),
     ...(status ? { status } : {}),
@@ -282,6 +283,7 @@ export function normalizePreference(pref: Preference): Preference {
     observed_at,
     supersession_reason: pref.supersession_reason ?? null,
     ...(pref.source_episode?.trim() ? { source_episode: pref.source_episode.trim() } : {}),
+    ...(pref.record_digest?.trim() ? { record_digest: pref.record_digest.trim() } : {}),
   };
 }
 
@@ -299,6 +301,18 @@ function validateOptionalTemporalIso(value: string | undefined, field: string, c
 function validateStringArray(values: unknown, fieldName: string, context: string): void {
   if (!Array.isArray(values) || values.some((value) => typeof value !== "string" || !value.trim())) {
     throw new Error(`${context} field "${fieldName}" must be an array of non-empty strings.`);
+  }
+}
+
+function validateOptionalDigestReference(
+  value: string | undefined,
+  fieldName: "source_episode" | "record_digest",
+  context: string,
+): void {
+  if (value === undefined) return;
+  if (fieldName === "source_episode") return;
+  if (!/^sha256:[a-f0-9]{64}$/u.test(value)) {
+    throw new Error(`${context} has invalid ${fieldName}. Expected sha256:<64 lowercase hex characters>.`);
   }
 }
 
@@ -414,6 +428,8 @@ export function validateMemory(memory: Memory, context = "Memory"): void {
   if (memory.source_episode !== undefined && typeof memory.source_episode !== "string") {
     throw new Error(`${context} has invalid source_episode.`);
   }
+  validateOptionalDigestReference(memory.source_episode, "source_episode", context);
+  validateOptionalDigestReference(memory.record_digest, "record_digest", context);
   if (memory.review_state !== undefined && !REVIEW_STATES.includes(memory.review_state)) {
     throw new Error(
       `${context} has unsupported review_state "${memory.review_state}". Expected one of: ${REVIEW_STATES.join(", ")}.`,
@@ -458,6 +474,8 @@ export function validatePreference(pref: Preference, context = "Preference"): vo
   if (!Number.isFinite(pref.confidence) || pref.confidence < 0 || pref.confidence > 1) {
     throw new Error(`${context} has invalid confidence "${pref.confidence}". Expected a number between 0 and 1.`);
   }
+  validateOptionalDigestReference(pref.source_episode, "source_episode", context);
+  validateOptionalDigestReference(pref.record_digest, "record_digest", context);
   validateOptionalTemporalIso(pref.valid_from, "valid_from", context);
   validateOptionalTemporalIso(pref.valid_until, "valid_until", context);
   validateOptionalTemporalIso(pref.observed_at, "observed_at", context);

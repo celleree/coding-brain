@@ -5,14 +5,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { buildInjection } from "../dist/inject.js";
-import {
-  buildSharePlan,
-  buildSkillShortlist,
-  initBrain,
-  loadAllPreferences,
-  saveMemory,
-  savePreference,
-} from "../dist/store-api.js";
+import { buildSharePlan, buildSkillShortlist, initBrain, loadAllPreferences } from "../dist/store-api.js";
+import { saveMemory, savePreference } from "./provenance-fixtures.mjs";
 
 const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, "dist", "cli.js");

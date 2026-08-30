@@ -26,6 +26,7 @@ import type {
   ReviewState,
   StoredMemoryRecord,
 } from "./types.js";
+import { verifyMemoryProvenance } from "./store/source-store.js";
 import {
   IMPORTANCE_LEVELS,
   INVOCATION_MODES,
@@ -177,7 +178,7 @@ export async function loadSchemaValidatedMemoryRecords(projectRoot: string): Pro
   };
 }
 
-function scanMemoryFile(projectRoot: string, filePath: string, content: string): ScannedMemoryFile {
+async function scanMemoryFile(projectRoot: string, filePath: string, content: string): Promise<ScannedMemoryFile> {
   const relativePath = path.relative(projectRoot, filePath);
   const memoryId = path.basename(filePath, ".md");
   const issues: MemorySchemaIssue[] = [];
@@ -227,6 +228,17 @@ function scanMemoryFile(projectRoot: string, filePath: string, content: string):
     relativePath,
     memory: normalizedMemory,
   };
+
+  const provenance = await verifyMemoryProvenance(projectRoot, normalizedMemory, relativePath);
+  if (!provenance.ok) {
+    issues.push({
+      code:
+        normalizedMemory.source_episode && normalizedMemory.record_digest ? "invalid_provenance" : "missing_provenance",
+      severity: "error",
+      field: normalizedMemory.source_episode ? "record_digest" : "source_episode",
+      message: `Provenance verification failed: ${provenance.reason}.`,
+    });
+  }
 
   return finalizeScannedFile(
     filePath,
@@ -322,6 +334,9 @@ function buildNormalizedMemory(frontmatter: RawFrontmatter, rawDetail: string): 
   }
   if (frontmatter.source_episode) {
     memory.source_episode = frontmatter.source_episode;
+  }
+  if (frontmatter.record_digest) {
+    memory.record_digest = frontmatter.record_digest;
   }
   if (frontmatter.review_state?.trim()) {
     memory.review_state = frontmatter.review_state.trim() as ReviewState;

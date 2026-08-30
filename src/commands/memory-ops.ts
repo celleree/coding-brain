@@ -16,6 +16,7 @@ import {
   initBrain,
   loadStoredMemoryRecords,
   loadStoredPreferenceRecords,
+  persistSourceBytes,
   supersedeMemoryPair,
   updateIndex,
 } from "../store.js";
@@ -220,7 +221,8 @@ export function register(program: Command): void {
 
       const records = await loadStoredMemoryRecords(projectRoot);
       const pendingState = await loadPendingReinforcementState(projectRoot);
-      const stdinText = options.pending ? "" : await helpers.readStdin();
+      const stdinPayload = options.pending ? undefined : await helpers.readStdinPayload();
+      const stdinText = stdinPayload?.text ?? "";
       if (!options.pending && !stdinText.trim()) {
         if (pendingState.events.length > 0) {
           throw new Error(
@@ -230,7 +232,7 @@ export function register(program: Command): void {
         throw new Error("Provide a session summary or commit message over stdin.");
       }
 
-      const events = options.pending
+      let events = options.pending
         ? pendingState.events
         : detectFailures(
             options.source === "git-commit" ? `Source: git-commit\n\n${stdinText}` : stdinText,
@@ -240,6 +242,10 @@ export function register(program: Command): void {
               relativePath: entry.relativePath,
             })),
           );
+      if (!options.pending && stdinPayload && events.length > 0) {
+        const sourceEpisode = await persistSourceBytes(projectRoot, stdinPayload.bytes);
+        events = events.map((event) => ({ ...event, source_episode: sourceEpisode }));
+      }
 
       const routingReminders = pendingState.routing_feedback_reminders ?? [];
       if (routingReminders.length > 0) {

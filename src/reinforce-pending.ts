@@ -228,24 +228,30 @@ function parseFailureEvent(value: unknown): FailureEvent | null {
   }
 
   if (kind === "violated_memory") {
-    return typeof candidate.relatedMemoryFile === "string" && candidate.relatedMemoryFile.trim()
-      ? {
-          kind,
-          description: description.trim(),
-          suggestedAction,
-          relatedMemoryFile: candidate.relatedMemoryFile.trim(),
-        }
-      : null;
-  }
-
-  return typeof candidate.draftContent === "string" && candidate.draftContent.trim()
-    ? {
+    if (typeof candidate.relatedMemoryFile === "string" && candidate.relatedMemoryFile.trim()) {
+      const event: FailureEvent = {
         kind,
         description: description.trim(),
         suggestedAction,
-        draftContent: candidate.draftContent.trim(),
-      }
-    : null;
+        relatedMemoryFile: candidate.relatedMemoryFile.trim(),
+      };
+      if (typeof candidate.source_episode === "string") event.source_episode = candidate.source_episode;
+      return event;
+    }
+    return null;
+  }
+
+  if (typeof candidate.draftContent === "string" && candidate.draftContent.trim()) {
+    const event: FailureEvent = {
+      kind,
+      description: description.trim(),
+      suggestedAction,
+      draftContent: candidate.draftContent.trim(),
+    };
+    if (typeof candidate.source_episode === "string") event.source_episode = candidate.source_episode;
+    return event;
+  }
+  return null;
 }
 
 function dedupeFailureEvents(events: FailureEvent[]): FailureEvent[] {

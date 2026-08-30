@@ -10,6 +10,16 @@ import { parseMemory, serializeMemory } from "./serialize.js";
 import { writeMemoryIndexCache } from "./memory-index.js";
 import { DEFAULT_MEMORY_VERSION, getMemoryStatus, normalizeMemory, validateMemory } from "./validate.js";
 import { commitAtomicWriteOperations, createAtomicWriteOperation } from "./atomic-write.js";
+import {
+  attestMemoryRecord,
+  memorySourceFieldsChanged,
+  prepareSourceBlobReferenceCheck,
+  prepareSourceBlobWrite,
+  sourceEpisodeForBytes,
+  type ProvenanceWriteOptions,
+  verifyMemoryProvenance,
+  verifySourceEpisode,
+} from "./source-store.js";
 
 const DIRECTORY_BY_TYPE: Record<MemoryType, string> = {
   decision: "decisions",
@@ -20,22 +30,60 @@ const DIRECTORY_BY_TYPE: Record<MemoryType, string> = {
   goal: "goals",
 };
 
-export async function saveMemory(memory: Memory, projectRoot: string): Promise<string> {
-  const normalizedMemory = normalizeMemory(memory);
-  validateMemory(normalizedMemory);
-  await initBrain(projectRoot);
-  if (getMemoryStatus(normalizedMemory) === "active") {
-    await supersedeMatchingActiveMemories(normalizedMemory, projectRoot);
+export async function saveMemory(
+  memory: Memory,
+  projectRoot: string,
+  provenance: ProvenanceWriteOptions = {},
+): Promise<string> {
+  let normalizedMemory = normalizeMemory({ ...memory, source: memory.source ?? "manual" });
+  const sourceBytes = provenance.sourceBytes;
+  if (sourceBytes !== undefined) {
+    const sourceEpisode = sourceEpisodeForBytes(sourceBytes);
+    if (normalizedMemory.source_episode && normalizedMemory.source_episode !== sourceEpisode) {
+      throw new Error("Memory source_episode does not match the provided source bytes.");
+    }
+    normalizedMemory = normalizeMemory({ ...normalizedMemory, source_episode: sourceEpisode });
   }
+  if (!normalizedMemory.source_episode) {
+    throw new Error("Cannot save memory without source bytes or a valid source_episode.");
+  }
+  if (sourceBytes === undefined) {
+    const sourceVerification = await verifySourceEpisode(projectRoot, normalizedMemory.source_episode);
+    if (!sourceVerification.ok) {
+      throw new Error(`Cannot save memory with invalid provenance: ${sourceVerification.reason}.`);
+    }
+  }
+  validateMemory(normalizedMemory);
+  const sourceBlobReferenceOperation =
+    sourceBytes === undefined
+      ? await prepareSourceBlobReferenceCheck(projectRoot, normalizedMemory.source_episode)
+      : null;
+
+  const supersessionOperations =
+    getMemoryStatus(normalizedMemory) === "active"
+      ? await prepareMatchingActiveMemorySupersessions(normalizedMemory, projectRoot)
+      : [];
+
+  await initBrain(projectRoot);
   const directory = DIRECTORY_BY_TYPE[normalizedMemory.type];
   const fileName = `${normalizedMemory.date.slice(0, 10)}-${slugifyMemoryTitle(normalizedMemory.title)}.md`;
   const brainDir = getBrainDir(projectRoot);
-  const content = serializeMemory(normalizedMemory);
   for (let attempt = 0; attempt < 1000; attempt += 1) {
     const relativePath = path.join(directory, ensureUniqueFileNameSuffix(normalizedMemory, fileName, attempt));
     const filePath = path.join(brainDir, relativePath);
+    if (await fileExists(filePath)) continue;
+    const sourceBlobOperation =
+      sourceBytes === undefined
+        ? sourceBlobReferenceOperation
+        : (await prepareSourceBlobWrite(projectRoot, sourceBytes)).operation;
+    const attestedMemory = attestMemoryRecord(normalizedMemory, relativePath);
+    const content = serializeMemory(attestedMemory);
     try {
-      await writeFile(filePath, content, { encoding: "utf8", flag: "wx" });
+      await commitAtomicWriteOperations([
+        ...(sourceBlobOperation ? [sourceBlobOperation] : []),
+        ...supersessionOperations,
+        createAtomicWriteOperation(filePath, content, { targetMustNotExist: true }),
+      ]);
       return filePath;
     } catch (error) {
       if (isFileAlreadyExistsError(error)) continue;
@@ -97,53 +145,150 @@ export async function updateIndex(projectRoot: string): Promise<void> {
 }
 
 export async function overwriteStoredMemory(record: StoredMemoryRecord): Promise<void> {
+  const current = parseMemory(await readFile(record.filePath, "utf8"), record.filePath);
+  const currentVerification = await verifyMemoryProvenance(
+    path.dirname(getBrainDirFromRecord(record)),
+    current,
+    record.relativePath,
+  );
+  if (!currentVerification.ok) {
+    throw new Error(`Cannot mutate memory with invalid provenance: ${currentVerification.reason}.`);
+  }
   const normalizedMemory = normalizeMemory(record.memory);
+  if (memorySourceFieldsChanged(current, normalizedMemory)) {
+    throw new Error("Semantic or evidence-driven memory changes require a newly sourced successor.");
+  }
   validateMemory(normalizedMemory);
-  await writeFile(record.filePath, serializeMemory(normalizedMemory), "utf8");
+  const attestedMemory = attestMemoryRecord(normalizedMemory, record.relativePath);
+  await writeFile(record.filePath, serializeMemory(attestedMemory), "utf8");
 }
 
 export async function supersedeMemoryPair(
   newRecord: StoredMemoryRecord,
   oldRecord: StoredMemoryRecord,
+  options: { activateNew?: boolean } = {},
 ): Promise<{ newVersion: number }> {
   const newRelativePath = toBrainRelativePath(newRecord.relativePath);
   const oldRelativePath = toBrainRelativePath(oldRecord.relativePath);
-  const nextVersion = (oldRecord.memory.version ?? DEFAULT_MEMORY_VERSION) + 1;
+  const projectRoot = path.dirname(getBrainDirFromRecord(oldRecord));
+  const [currentNewContent, currentOldContent] = await Promise.all([
+    readFile(newRecord.filePath, "utf8"),
+    readFile(oldRecord.filePath, "utf8"),
+  ]);
+  const currentNewMemory = parseMemory(currentNewContent, newRecord.filePath);
+  const currentOldMemory = parseMemory(currentOldContent, oldRecord.filePath);
+  const [newVerification, oldVerification] = await Promise.all([
+    verifyMemoryProvenance(projectRoot, currentNewMemory, newRecord.relativePath),
+    verifyMemoryProvenance(projectRoot, currentOldMemory, oldRecord.relativePath),
+  ]);
+  if (!newVerification.ok || !oldVerification.ok) {
+    throw new Error(
+      `Cannot supersede memories with invalid provenance: ${newVerification.reason ?? oldVerification.reason}.`,
+    );
+  }
+  const nextVersion = (currentOldMemory.version ?? DEFAULT_MEMORY_VERSION) + 1;
   const nowIso = new Date().toISOString();
   const updatedNewMemory = normalizeMemory({
-    ...newRecord.memory,
+    ...currentNewMemory,
+    ...(options.activateNew ? { status: "active" as const, review_state: "cleared" as const } : {}),
     supersedes: oldRelativePath,
     version: nextVersion,
-    observed_at: newRecord.memory.observed_at ?? nowIso,
+    observed_at: currentNewMemory.observed_at ?? nowIso,
   });
   const updatedOldMemory = normalizeMemory({
-    ...oldRecord.memory,
+    ...currentOldMemory,
+    status: "superseded",
     superseded_by: newRelativePath,
     stale: true,
-    valid_until: oldRecord.memory.valid_until ?? nowIso,
-    supersession_reason: oldRecord.memory.supersession_reason ?? "Superseded by linked newer memory",
+    valid_until: currentOldMemory.valid_until ?? nowIso,
+    supersession_reason: currentOldMemory.supersession_reason ?? "Superseded by linked newer memory",
   });
   validateMemory(updatedNewMemory, `Memory file "${newRecord.filePath}"`);
   validateMemory(updatedOldMemory, `Memory file "${oldRecord.filePath}"`);
+  if (
+    memorySourceFieldsChanged(currentNewMemory, updatedNewMemory) ||
+    memorySourceFieldsChanged(currentOldMemory, updatedOldMemory)
+  ) {
+    throw new Error("Supersession may only update lifecycle and lineage fields on existing sourced records.");
+  }
+  const attestedNewMemory = attestMemoryRecord(updatedNewMemory, newRecord.relativePath);
+  const attestedOldMemory = attestMemoryRecord(updatedOldMemory, oldRecord.relativePath);
   await commitAtomicWriteOperations([
-    createAtomicWriteOperation(newRecord.filePath, serializeMemory(updatedNewMemory)),
-    createAtomicWriteOperation(oldRecord.filePath, serializeMemory(updatedOldMemory)),
+    createAtomicWriteOperation(newRecord.filePath, serializeMemory(attestedNewMemory), {
+      expectedContent: currentNewContent,
+    }),
+    createAtomicWriteOperation(oldRecord.filePath, serializeMemory(attestedOldMemory), {
+      expectedContent: currentOldContent,
+    }),
   ]);
   return { newVersion: nextVersion };
 }
 
 export async function approveCandidateMemory(record: StoredMemoryRecord, projectRoot: string): Promise<void> {
+  const currentCandidateContent = await readFile(record.filePath, "utf8");
+  const currentCandidate = parseMemory(currentCandidateContent, record.filePath);
+  const provenance = await verifyMemoryProvenance(projectRoot, currentCandidate, record.relativePath);
+  if (!provenance.ok) {
+    throw new Error(`Cannot promote memory with invalid provenance: ${provenance.reason}.`);
+  }
+  if (getMemoryStatus(currentCandidate) !== "candidate") {
+    throw new Error("Cannot promote memory because the current persisted record is not a candidate.");
+  }
   const nowIso = new Date().toISOString();
   const promotedMemory: Memory = normalizeMemory({
-    ...record.memory,
+    ...currentCandidate,
     status: "active",
     stale: false,
-    observed_at: record.memory.observed_at ?? nowIso,
+    observed_at: currentCandidate.observed_at ?? nowIso,
     review_state: "cleared",
-    valid_from: record.memory.valid_from ?? nowIso.slice(0, 10),
+    valid_from: currentCandidate.valid_from ?? nowIso.slice(0, 10),
   });
-  await supersedeMatchingActiveMemories(promotedMemory, projectRoot, record.filePath);
-  await overwriteStoredMemory({ ...record, memory: promotedMemory });
+  if (memorySourceFieldsChanged(currentCandidate, promotedMemory)) {
+    throw new Error("Promotion may only update lifecycle fields on the sourced candidate.");
+  }
+  validateMemory(promotedMemory);
+
+  const operations = [
+    createAtomicWriteOperation(
+      record.filePath,
+      serializeMemory(attestMemoryRecord(promotedMemory, record.relativePath)),
+      { expectedContent: currentCandidateContent },
+    ),
+  ];
+  const nextIdentity = buildScopedMemoryIdentity(promotedMemory);
+  const existingMemories = await loadStoredMemories(projectRoot);
+  for (const entry of existingMemories) {
+    if (entry.filePath === record.filePath || getMemoryStatus(entry.memory) !== "active") continue;
+    if (buildScopedMemoryIdentity(entry.memory) !== nextIdentity) continue;
+
+    const currentActiveContent = await readFile(entry.filePath, "utf8");
+    const currentActive = parseMemory(currentActiveContent, entry.filePath);
+    const activeProvenance = await verifyMemoryProvenance(projectRoot, currentActive, entry.relativePath);
+    if (!activeProvenance.ok) {
+      throw new Error(`Cannot promote memory while matching active provenance is invalid: ${activeProvenance.reason}.`);
+    }
+    const supersededMemory = normalizeMemory({
+      ...currentActive,
+      status: "superseded",
+      stale: true,
+      valid_until: currentActive.valid_until ?? nowIso,
+      supersession_reason:
+        currentActive.supersession_reason ?? "Superseded by newer active memory with the same identity",
+    });
+    if (memorySourceFieldsChanged(currentActive, supersededMemory)) {
+      throw new Error("Promotion supersession may only update lifecycle fields on existing sourced records.");
+    }
+    validateMemory(supersededMemory);
+    operations.push(
+      createAtomicWriteOperation(
+        entry.filePath,
+        serializeMemory(attestMemoryRecord(supersededMemory, entry.relativePath)),
+        { expectedContent: currentActiveContent },
+      ),
+    );
+  }
+
+  await commitAtomicWriteOperations(operations);
 }
 
 export async function updateStoredMemoryStatus(record: StoredMemoryRecord, status: MemoryStatus): Promise<void> {
@@ -195,34 +340,61 @@ async function loadStoredMemories(projectRoot: string): Promise<StoredMemoryReco
   return memoriesByType.flat().sort((left, right) => right.memory.date.localeCompare(left.memory.date));
 }
 
-async function supersedeMatchingActiveMemories(
-  memory: Memory,
-  projectRoot: string,
-  ignoredFilePath: string | null = null,
-): Promise<void> {
+async function prepareMatchingActiveMemorySupersessions(memory: Memory, projectRoot: string) {
   const existingMemories = await loadStoredMemories(projectRoot);
   const nextIdentity = buildScopedMemoryIdentity(memory);
-  await Promise.all(
-    existingMemories.map(async (entry) => {
-      if (ignoredFilePath && entry.filePath === ignoredFilePath) return;
-      if (getMemoryStatus(entry.memory) !== "active") return;
-      if (buildScopedMemoryIdentity(entry.memory) !== nextIdentity) return;
-      const nowIso = new Date().toISOString();
-      const updatedMemory = normalizeMemory({
-        ...entry.memory,
-        status: "superseded",
-        stale: true,
-        valid_until: entry.memory.valid_until ?? nowIso,
-        supersession_reason:
-          entry.memory.supersession_reason ?? "Superseded by newer active memory with the same identity",
-      });
-      await writeFile(entry.filePath, serializeMemory(updatedMemory), "utf8");
+  const matchingMemories = existingMemories.filter(
+    (entry) => getMemoryStatus(entry.memory) === "active" && buildScopedMemoryIdentity(entry.memory) === nextIdentity,
+  );
+
+  const currentMatches = await Promise.all(
+    matchingMemories.map(async (entry) => {
+      const content = await readFile(entry.filePath, "utf8");
+      const current = parseMemory(content, entry.filePath);
+      const provenance = await verifyMemoryProvenance(projectRoot, current, entry.relativePath);
+      return { ...entry, memory: current, provenance, content };
     }),
   );
+  const invalidMatch = currentMatches.find((entry) => !entry.provenance.ok);
+  if (invalidMatch) {
+    throw new Error(
+      `Cannot save active memory while matching active provenance is invalid: ${invalidMatch.provenance.reason}.`,
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  return currentMatches.map((entry) => {
+    const updatedMemory = normalizeMemory({
+      ...entry.memory,
+      status: "superseded",
+      stale: true,
+      valid_until: entry.memory.valid_until ?? nowIso,
+      supersession_reason:
+        entry.memory.supersession_reason ?? "Superseded by newer active memory with the same identity",
+    });
+    if (memorySourceFieldsChanged(entry.memory, updatedMemory)) {
+      throw new Error("Save supersession may only update lifecycle fields on existing sourced records.");
+    }
+    validateMemory(updatedMemory);
+    return createAtomicWriteOperation(
+      entry.filePath,
+      serializeMemory(attestMemoryRecord(updatedMemory, entry.relativePath)),
+      { expectedContent: entry.content },
+    );
+  });
 }
 
 function toBrainRelativePath(relativePath: string): string {
   return relativePath.replace(/\\/g, "/").replace(/^\.brain\//, "");
+}
+
+function getBrainDirFromRecord(record: StoredMemoryRecord): string {
+  const relativeParts = record.relativePath.replace(/\\/g, "/").split("/");
+  const brainIndex = relativeParts.lastIndexOf(".brain");
+  const suffixLength = brainIndex >= 0 ? relativeParts.length - brainIndex - 1 : 2;
+  let brainDir = record.filePath;
+  for (let index = 0; index < suffixLength; index += 1) brainDir = path.dirname(brainDir);
+  return brainDir;
 }
 
 function ensureUniqueFileNameSuffix(memory: Memory, fileName: string, attempt = 0): string {
@@ -252,8 +424,18 @@ function titleForType(type: MemoryType): string {
   }
 }
 
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await readFile(filePath, "utf8");
+    return true;
+  } catch (error) {
+    if (isMissingDirectoryError(error)) return false;
+    throw error;
+  }
+}
+
 function isFileAlreadyExistsError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && typeof error.code === "string" && error.code === "EEXIST";
+  return error instanceof Error && "code" in error && error.code === "EEXIST";
 }
 
 function isMissingDirectoryError(error: unknown): boolean {

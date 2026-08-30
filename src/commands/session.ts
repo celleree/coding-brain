@@ -179,7 +179,7 @@ export function register(program: Command): void {
               "Try a clearer sentence, use `brain capture-preference`, or promote with `--to memory`.",
           );
         }
-        const savedPath = await savePreference(preference, projectRoot);
+        const savedPath = await savePreference(preference, projectRoot, { sourceBytes: Buffer.from(body, "utf8") });
         output.write(`${t("session.preference_saved", language, { path: savedPath })}\n`);
         return;
       }
@@ -212,7 +212,7 @@ export function register(program: Command): void {
         status: memoryType === "goal" ? "active" : "active",
       };
 
-      const savedPath = await saveMemory(memory, projectRoot);
+      const savedPath = await saveMemory(memory, projectRoot, { sourceBytes: Buffer.from(body, "utf8") });
       output.write(`${t("session.memory_saved", language, { path: savedPath })}\n`);
     });
 

@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { buildMemoryAudit, renderMemoryAuditResult } from "../dist/audit-memory.js";
-import { initBrain, saveMemory } from "../dist/store-api.js";
+import { initBrain } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 const AUDIT_NOW = "2026-04-02T00:00:00.000Z";
 

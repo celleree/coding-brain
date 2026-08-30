@@ -3,14 +3,23 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { initBrain, saveMemory } from "../dist/store-api.js";
-import { reinforceMemories } from "../dist/reinforce.js";
+import { initBrain, loadStoredMemoryRecords, saveMemory as saveMemoryRecord } from "../dist/store-api.js";
+import { reinforceMemories as reinforceMemoryRecords } from "../dist/reinforce.js";
 
 const repoRoot = process.cwd();
 const fixturePath = path.join(repoRoot, "test", "fixtures", "reinforce-llm-fixture.mjs");
 const fixtureCommand = `"${process.execPath}" "${fixturePath}"`;
 
-await runTest("reinforceMemories boosts score and appends a session failure note", async () => {
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
+
+function reinforceMemories(events, memoriesDir, provenance) {
+  const sourceBytes = Buffer.from(events.map((event) => event.draftContent ?? event.description).join("\n"), "utf8");
+  return reinforceMemoryRecords(events, memoriesDir, provenance ?? { sourceBytes });
+}
+
+await runTest("reinforceMemories creates a newly sourced score successor", async () => {
   await withTempRepo(async (projectRoot) => {
     const filePath = await saveMemory(
       {
@@ -43,10 +52,15 @@ await runTest("reinforceMemories boosts score and appends a session failure note
       path.join(projectRoot, ".brain"),
     );
 
-    const raw = await readFile(filePath, "utf8");
-    assert.deepEqual(result.boosted, [path.basename(filePath)]);
-    assert.match(raw, /score: 100/);
-    assert.match(raw, /> ⚡ score 因 session 失败而提升，日期：\d{4}-\d{2}-\d{2}/);
+    assert.equal(result.boosted.length, 1);
+    assert.notEqual(result.boosted[0], path.basename(filePath));
+    const records = await loadStoredMemoryRecords(projectRoot);
+    const oldRecord = records.find((record) => record.filePath === filePath);
+    const successor = records.find((record) => path.basename(record.filePath) === result.boosted[0]);
+    assert.equal(oldRecord?.memory.status, "superseded");
+    assert.equal(successor?.memory.status, "active");
+    assert.equal(successor?.memory.score, 100);
+    assert.notEqual(successor?.memory.source_episode, oldRecord?.memory.source_episode);
   });
 });
 
@@ -88,10 +102,12 @@ await runTest("reinforceMemories rewrites a violated memory body and preserves f
           path.join(projectRoot, ".brain"),
         );
 
-        const raw = await readFile(filePath, "utf8");
+        const successorPath = path.join(projectRoot, ".brain", "decisions", result.rewritten[0]);
+        const raw = await readFile(successorPath, "utf8");
         const [, frontmatter, body] = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/) ?? [];
 
-        assert.deepEqual(result.rewritten, [path.basename(filePath)]);
+        assert.equal(result.rewritten.length, 1);
+        assert.notEqual(result.rewritten[0], path.basename(filePath));
         assert.match(frontmatter ?? "", /type: "decision"/);
         assert.match(frontmatter ?? "", /hit_count: 2/);
         assert.match(frontmatter ?? "", /score: 75/);
@@ -178,7 +194,8 @@ await runTest("reinforceMemories isolates per-event failures", async () => {
           path.join(projectRoot, ".brain"),
         );
 
-        assert.deepEqual(result.boosted, [path.basename(filePath)]);
+        assert.equal(result.boosted.length, 1);
+        assert.notEqual(result.boosted[0], path.basename(filePath));
       });
     },
   );

@@ -1,12 +1,18 @@
 import { execSync } from "node:child_process";
-import { getMemoryStatus, loadAllPreferences, loadStoredMemoryRecords } from "./store.js";
+import {
+  getMemoryStatus,
+  loadStoredMemoryRecords,
+  loadStoredPreferenceRecords,
+  verifyMemoryProvenance,
+  verifyPreferenceProvenance,
+} from "./store.js";
 import { isMemoryCurrentlyValid } from "./temporal.js";
 import { matchPathPatterns, matchTaskTriggers, normalizePaths } from "./memory-relevance.js";
 import { buildInvocationPlan } from "./invocation-plan-renderer.js";
 import { buildPreferencePolicyInput, buildStaticMemoryPolicyInput, buildTaskContextInput } from "./routing-inputs.js";
 import { runRoutingEngine } from "./routing-engine.js";
 import { buildApplicableSessionPreferences, loadSessionProfile } from "./session-profile.js";
-import type { Importance, InvocationMode, RiskLevel, StoredMemoryRecord } from "./types.js";
+import type { Importance, InvocationMode, Preference, RiskLevel, StoredMemoryRecord } from "./types.js";
 
 export type {
   InvocationPlan,
@@ -67,7 +73,16 @@ export async function buildSkillShortlist(
     );
   }
 
-  const records = await loadStoredMemoryRecords(projectRoot);
+  const loadedRecords = await loadStoredMemoryRecords(projectRoot);
+  const records = (
+    await Promise.all(
+      loadedRecords.map(async (record) => {
+        if (getMemoryStatus(record.memory) !== "active") return record;
+        const verification = await verifyMemoryProvenance(projectRoot, record.memory, record.relativePath);
+        return verification.ok ? record : null;
+      }),
+    )
+  ).filter((record): record is StoredMemoryRecord => record !== null);
   const now = new Date();
   const matched_memories = records
     .filter((entry) => getMemoryStatus(entry.memory) === "active" && isMemoryCurrentlyValid(entry.memory, now))
@@ -82,7 +97,16 @@ export async function buildSkillShortlist(
       return right.record.memory.date.localeCompare(left.record.memory.date);
     });
 
-  const allPreferences = await loadAllPreferences(projectRoot);
+  const preferenceRecords = await loadStoredPreferenceRecords(projectRoot);
+  const allPreferences = (
+    await Promise.all(
+      preferenceRecords.map(async (record) => {
+        if (record.preference.status !== "active") return record.preference;
+        const verification = await verifyPreferenceProvenance(projectRoot, record.preference, record.relativePath);
+        return verification.ok ? record.preference : null;
+      }),
+    )
+  ).filter((preference): preference is Preference => preference !== null);
   const staticInput = buildStaticMemoryPolicyInput(matched_memories);
   const preferenceInput = buildPreferencePolicyInput(allPreferences, task, paths, new Date());
   const taskContext = buildTaskContextInput(projectRoot, {

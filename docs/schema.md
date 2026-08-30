@@ -48,6 +48,15 @@ Detailed frontmatter and schema guidance moved from `README.md`.
 - `expires`
 - `origin`
 - `source_episode`
+- `record_digest`
+
+`source_episode` is the shared `sha256:<digest>` identity of the exact raw source bytes stored under
+`.brain/sources/sha256/`. `record_digest` separately attests the normalized persisted record and its
+`.brain`-relative path. Source blobs are evidence only: they are not indexed, injected, ranked, or routed.
+
+New writes and promotions require valid provenance. Injection and routing exclude active records whose source blob
+or record attestation does not verify. Normalization preserves provenance fields as written and never creates or
+repairs them.
 
 ## Temporal Validity Fields
 

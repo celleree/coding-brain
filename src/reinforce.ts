@@ -1,11 +1,17 @@
 import { spawn } from "node:child_process";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { slugifyMemoryTitle } from "./memory-identity.js";
 import type { FailureEvent } from "./failure-detector.js";
-import { saveMemory } from "./store.js";
-import type { Memory } from "./types.js";
+import {
+  loadStoredMemoryRecords,
+  persistSourceBytes,
+  saveMemory,
+  supersedeMemoryPair,
+  verifyMemoryProvenance,
+} from "./store.js";
+import type { Memory, StoredMemoryRecord } from "./types.js";
 
 type ViolatedBoostEvent = FailureEvent & {
   kind: "violated_memory";
@@ -33,9 +39,19 @@ export type ReinforceResult = {
 
 const REINFORCEMENT_INCREMENT = 15;
 const NEW_FAILURE_SCORE = 70;
-const BOOST_NOTE_PREFIX = "> ⚡ score 因 session 失败而提升，日期：";
 
-export async function reinforceMemories(events: FailureEvent[], memoriesDir: string): Promise<ReinforceResult> {
+export async function reinforceMemories(
+  events: FailureEvent[],
+  memoriesDir: string,
+  options: { sourceBytes?: Uint8Array } = {},
+): Promise<ReinforceResult> {
+  if (events.some((event) => !event.source_episode)) {
+    if (!options.sourceBytes) {
+      throw new Error("Reinforcement requires source bytes or a valid source_episode on every event.");
+    }
+    const sourceEpisode = await persistSourceBytes(path.dirname(memoriesDir), options.sourceBytes);
+    events = events.map((event) => ({ ...event, source_episode: event.source_episode ?? sourceEpisode }));
+  }
   const result: ReinforceResult = {
     boosted: [],
     rewritten: [],
@@ -47,7 +63,7 @@ export async function reinforceMemories(events: FailureEvent[], memoriesDir: str
 
     try {
       if (isViolatedBoostEvent(event)) {
-        const updatedFile = await boostMemoryScore(event.relatedMemoryFile, memoriesDir);
+        const updatedFile = await boostMemoryScore(event, memoriesDir);
         if (updatedFile) {
           result.boosted.push(updatedFile);
         }
@@ -76,58 +92,24 @@ export async function reinforceMemories(events: FailureEvent[], memoriesDir: str
   return result;
 }
 
-async function boostMemoryScore(fileName: string, memoriesDir: string): Promise<string | null> {
-  const filePath = await findMemoryFile(memoriesDir, fileName);
-  if (!filePath) {
-    return null;
-  }
-
-  try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = parseMemoryFile(raw);
-    if (!parsed) {
-      return null;
-    }
-
-    const nextFrontmatter = upsertFrontmatterField(
-      parsed.frontmatter,
-      "score",
-      String(boostScoreValue(parsed.frontmatter)),
-    );
-    const nextBody = appendFooterLine(parsed.body, `${BOOST_NOTE_PREFIX}${todayDate()}`);
-
-    await writeFile(filePath, renderMemoryFile(parsed.opening, nextFrontmatter, nextBody), "utf8");
-    return path.basename(filePath);
-  } catch {
-    return null;
-  }
+async function boostMemoryScore(event: ViolatedBoostEvent, memoriesDir: string): Promise<string | null> {
+  const projectRoot = path.dirname(memoriesDir);
+  const oldRecord = await findMemoryRecord(projectRoot, event.relatedMemoryFile);
+  if (!oldRecord) return null;
+  return createFailureSuccessor(projectRoot, event, oldRecord, {
+    score: Math.min(100, oldRecord.memory.score + REINFORCEMENT_INCREMENT),
+  });
 }
 
 async function rewriteMemoryFromFailure(event: ViolatedRewriteEvent, memoriesDir: string): Promise<string | null> {
-  const filePath = await findMemoryFile(memoriesDir, event.relatedMemoryFile);
-  if (!filePath) {
-    return null;
-  }
-
-  try {
-    const raw = await readFile(filePath, "utf8");
-    const parsed = parseMemoryFile(raw);
-    if (!parsed) {
-      return null;
-    }
-
-    const nextFrontmatter = upsertFrontmatterField(
-      parsed.frontmatter,
-      "score",
-      String(boostScoreValue(parsed.frontmatter)),
-    );
-    const rewrittenBody = await rewriteBodyWithLlm(event, parsed.body);
-
-    await writeFile(filePath, renderMemoryFile(parsed.opening, nextFrontmatter, rewrittenBody), "utf8");
-    return path.basename(filePath);
-  } catch {
-    return null;
-  }
+  const projectRoot = path.dirname(memoriesDir);
+  const oldRecord = await findMemoryRecord(projectRoot, event.relatedMemoryFile);
+  if (!oldRecord) return null;
+  const rewrittenBody = await rewriteBodyWithLlm(event, oldRecord.memory.detail);
+  return createFailureSuccessor(projectRoot, event, oldRecord, {
+    detail: rewrittenBody,
+    score: Math.min(100, oldRecord.memory.score + REINFORCEMENT_INCREMENT),
+  });
 }
 
 async function extractNewFailureMemory(event: NewFailureExtractEvent, memoriesDir: string): Promise<string | null> {
@@ -136,11 +118,56 @@ async function extractNewFailureMemory(event: NewFailureExtractEvent, memoriesDi
   try {
     await mkdir(path.join(memoriesDir, "gotchas"), { recursive: true });
     const memory = await completeFailureMemory(event);
-    const filePath = await saveMemory(memory, projectRoot);
+    if (!event.source_episode) return null;
+    const filePath = await saveMemory({ ...memory, source_episode: event.source_episode }, projectRoot);
     return path.basename(filePath);
   } catch {
     return null;
   }
+}
+
+async function createFailureSuccessor(
+  projectRoot: string,
+  event: ViolatedBoostEvent | ViolatedRewriteEvent,
+  oldRecord: StoredMemoryRecord,
+  changes: Partial<Memory>,
+): Promise<string | null> {
+  if (!oldRecord) return null;
+  if (!event.source_episode) return null;
+  const verification = await verifyMemoryProvenance(projectRoot, oldRecord.memory, oldRecord.relativePath);
+  if (!verification.ok) return null;
+  const now = new Date().toISOString();
+  const { record_digest: _recordDigest, source_episode: _oldSourceEpisode, ...oldMemory } = oldRecord.memory;
+  const successor: Memory = {
+    ...oldMemory,
+    ...changes,
+    date: now,
+    created_at: now,
+    created: now.slice(0, 10),
+    updated: now.slice(0, 10),
+    observed_at: now,
+    status: "candidate",
+    stale: false,
+    supersedes: null,
+    superseded_by: null,
+    version: 1,
+    source: "session",
+    source_episode: event.source_episode,
+  };
+  const filePath = await saveMemory(successor, projectRoot);
+  const newRecord = (await loadStoredMemoryRecords(projectRoot)).find((record) => record.filePath === filePath);
+  if (!newRecord) return null;
+  await supersedeMemoryPair(newRecord, oldRecord, { activateNew: true });
+  return path.basename(filePath);
+}
+
+async function findMemoryRecord(projectRoot: string, fileName: string) {
+  const normalized = fileName.trim().toLowerCase();
+  return (
+    (await loadStoredMemoryRecords(projectRoot)).find(
+      (record) => path.basename(record.filePath).toLowerCase() === normalized,
+    ) ?? null
+  );
 }
 
 async function rewriteBodyWithLlm(event: ViolatedRewriteEvent, existingBody: string): Promise<string> {
@@ -276,85 +303,6 @@ async function runCommand(command: string, prompt: string): Promise<string> {
     child.stdin.write(prompt);
     child.stdin.end();
   });
-}
-
-async function findMemoryFile(memoriesDir: string, fileName: string): Promise<string | null> {
-  const normalizedTarget = fileName.trim().toLowerCase();
-  if (!normalizedTarget) {
-    return null;
-  }
-
-  for (const directory of ["decisions", "gotchas", "conventions", "patterns", "working", "goals"]) {
-    try {
-      const entries = await readdir(path.join(memoriesDir, directory), { withFileTypes: true });
-      const match = entries.find((entry) => entry.isFile() && entry.name.toLowerCase() === normalizedTarget);
-      if (match) {
-        return path.join(memoriesDir, directory, match.name);
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-}
-
-function parseMemoryFile(raw: string): { opening: string; frontmatter: string; body: string } | null {
-  const match = raw.match(/^(---\r?\n)([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!match) {
-    return null;
-  }
-
-  const opening = match[1];
-  const frontmatter = match[2];
-  const body = match[3];
-  if (!opening || frontmatter === undefined || body === undefined) {
-    return null;
-  }
-
-  return {
-    opening,
-    frontmatter,
-    body: body.trim(),
-  };
-}
-
-function renderMemoryFile(opening: string, frontmatter: string, body: string): string {
-  return `${opening}${frontmatter}\n---\n\n${body.trim()}\n`;
-}
-
-function boostScoreValue(frontmatter: string): number {
-  const current = readNumericFrontmatter(frontmatter, "score") ?? 60;
-  return Math.min(100, current + REINFORCEMENT_INCREMENT);
-}
-
-function readNumericFrontmatter(frontmatter: string, field: string): number | null {
-  const pattern = new RegExp(`^${field}:\\s*(\\d+)\\s*$`, "m");
-  const match = frontmatter.match(pattern);
-  if (!match?.[1]) {
-    return null;
-  }
-
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function upsertFrontmatterField(frontmatter: string, field: string, value: string): string {
-  const pattern = new RegExp(`^${field}:\\s*.*$`, "m");
-  if (pattern.test(frontmatter)) {
-    return frontmatter.replace(pattern, `${field}: ${value}`);
-  }
-
-  return `${frontmatter}\n${field}: ${value}`;
-}
-
-function appendFooterLine(body: string, footerLine: string): string {
-  const trimmed = body.trim();
-  if (!trimmed) {
-    return footerLine;
-  }
-
-  return trimmed.includes(footerLine) ? trimmed : `${trimmed}\n\n${footerLine}`;
 }
 
 function normalizeRewriteBody(body: string): string {

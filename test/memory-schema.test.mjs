@@ -51,43 +51,38 @@ await runTest("schema lint reports invalid enums, conflicts, and missing skill m
 
 await runTest("schema normalize autofills dates and deduplicates tags scope and skills", async () => {
   await withTempRepo(async (projectRoot) => {
-    const targetFile = path.join(projectRoot, ".brain", "patterns", "2026-04-03-normalize-me.md");
-    await writeFile(
-      targetFile,
-      [
-        "---",
-        'type: "pattern"',
-        'title: "Normalize metadata"',
-        'summary: "Keep frontmatter compact and consistent."',
-        "tags:",
-        '  - "zeta"',
-        '  - "alpha"',
-        '  - "alpha"',
-        'importance: "medium"',
-        'date: "2026-04-03T10:30:00.000Z"',
-        'created: "2026-04-01"',
-        "path_scope:",
-        '  - "./src/api//"',
-        '  - "."',
-        '  - "src/api"',
-        "files:",
-        '  - "src/api/user.ts"',
-        '  - ".\\\\src\\\\api\\\\user.ts"',
-        "recommended_skills:",
-        '  - "playwright"',
-        '  - "playwright"',
-        "---",
-        "",
-        "## PATTERN",
-        "",
-        "Keep metadata compact and reviewable.",
-        "",
-      ].join("\n"),
-      "utf8",
+    const targetFile = await saveMemory(
+      {
+        type: "pattern",
+        title: "Normalize metadata",
+        summary: "Keep frontmatter compact and consistent.",
+        detail: "## PATTERN\n\nKeep metadata compact and reviewable.",
+        tags: ["alpha", "zeta"],
+        importance: "medium",
+        date: "2026-04-03T10:30:00.000Z",
+        created_at: "2026-04-03T10:30:00.000Z",
+        created: "2026-04-01",
+        updated: "2026-04-01",
+        path_scope: ["src/api"],
+        files: ["src/api/user.ts"],
+        recommended_skills: ["playwright"],
+        source: "manual",
+        status: "active",
+      },
+      projectRoot,
+      { sourceBytes: Buffer.from("Keep metadata compact and reviewable.", "utf8") },
     );
+    const denormalized = (await readFile(targetFile, "utf8"))
+      .replace(/^created_at:.*\n/mu, "")
+      .replace(/^updated:.*\n/mu, "")
+      .replace('tags:\n  - "alpha"\n  - "zeta"', 'tags:\n  - "zeta"\n  - "alpha"\n  - "alpha"')
+      .replace('path_scope:\n  - "src/api"', 'path_scope:\n  - "./src/api//"\n  - "."\n  - "src/api"')
+      .replace('files:\n  - "src/api/user.ts"', 'files:\n  - "src/api/user.ts"\n  - ".\\\\src\\\\api\\\\user.ts"')
+      .replace('recommended_skills:\n  - "playwright"', 'recommended_skills:\n  - "playwright"\n  - "playwright"');
+    await writeFile(targetFile, denormalized, "utf8");
 
     const result = await normalizeMemorySchemas(projectRoot);
-    const file = result.files.find((entry) => entry.memory_id === "2026-04-03-normalize-me");
+    const file = result.files.find((entry) => entry.memory_id === path.basename(targetFile, ".md"));
     assert.ok(file);
     assert.equal(file.fixable, true);
 
@@ -119,6 +114,7 @@ await runTest("brain lint-memory and normalize-memory expose schema health in CL
         recommended_skills: ["playwright", "playwright"],
       },
       projectRoot,
+      { sourceBytes: Buffer.from("Keep the migration checklist short-lived.", "utf8") },
     );
 
     const lintResult = await runCliProcess(["lint-memory"], projectRoot);

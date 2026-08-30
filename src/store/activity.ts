@@ -8,6 +8,7 @@ import { commitAtomicWriteOperations, createAtomicWriteOperation, type AtomicWri
 import { loadStoredMemoryRecords } from "./memory-store.js";
 import { serializeMemory } from "./serialize.js";
 import { looksLikeCorruptedPlaceholderText, normalizeMemory, validateMemory } from "./validate.js";
+import { attestMemoryRecord, verifyMemoryProvenance } from "./source-store.js";
 
 export async function recordInjectedMemories(
   projectRoot: string,
@@ -32,6 +33,8 @@ export async function recordInjectedMemories(
     const existingRecords = await loadStoredMemoryRecords(projectRoot);
     for (const entry of existingRecords) {
       if (!touchedKeys.has(getMemoryKey(entry.memory))) continue;
+      const provenance = await verifyMemoryProvenance(projectRoot, entry.memory, entry.relativePath);
+      if (!provenance.ok) continue;
       const normalizedMemory = normalizeMemory({
         ...entry.memory,
         hit_count: entry.memory.hit_count + 1,
@@ -39,7 +42,12 @@ export async function recordInjectedMemories(
         stale: false,
       });
       validateMemory(normalizedMemory);
-      operations.push(createAtomicWriteOperation(entry.filePath, serializeMemory(normalizedMemory)));
+      operations.push(
+        createAtomicWriteOperation(
+          entry.filePath,
+          serializeMemory(attestMemoryRecord(normalizedMemory, entry.relativePath)),
+        ),
+      );
     }
   }
 

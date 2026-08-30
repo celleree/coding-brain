@@ -574,7 +574,7 @@ async function handleAddMemory(args: Record<string, unknown>, projectRoot: strin
     status: "active",
   };
 
-  const filePath = await saveMemory(memory, projectRoot);
+  const filePath = await saveMemory(memory, projectRoot, { sourceBytes: Buffer.from(content, "utf8") });
   await updateIndex(projectRoot);
 
   return {
@@ -778,7 +778,7 @@ async function handleCapture(args: Record<string, unknown>, projectRoot: string)
       status: "candidate",
       source: "session",
     };
-    const savedPath = await saveMemory(toSave, projectRoot);
+    const savedPath = await saveMemory(toSave, projectRoot, { sourceBytes: Buffer.from(rawInput, "utf8") });
     savedPaths.push(savedPath);
   }
 

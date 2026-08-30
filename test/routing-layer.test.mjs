@@ -1,9 +1,26 @@
 import { expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { buildSkillShortlist, initBrain, saveMemory, savePreference } from "../dist/store-api.js";
+import {
+  buildSkillShortlist,
+  initBrain,
+  saveMemory as saveMemoryRecord,
+  savePreference as savePreferenceRecord,
+} from "../dist/store-api.js";
+
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
+
+function savePreference(preference, projectRoot, provenance) {
+  return savePreferenceRecord(
+    preference,
+    projectRoot,
+    provenance ?? { sourceBytes: Buffer.from(preference.reason, "utf8") },
+  );
+}
 
 await runTest("routing with static memories only matches prior invocation_plan shape", async () => {
   await withTempRepo(async (projectRoot) => {
@@ -197,6 +214,59 @@ await runTest("memory.required vs preference.avoid surfaces explainable conflict
     assert.equal(pc.kind, "required_vs_suppressed");
     assert.ok(pc.reason.toLowerCase().includes("required"));
     assert.ok(result.routing_explanation?.skill_evidence.playwright?.some((l) => l.includes("preference_avoid")));
+  });
+});
+
+await runTest("routing excludes provenance-invalid active memories and preferences", async () => {
+  await withTempRepo(async (projectRoot) => {
+    const memoryPath = await saveMemory(
+      {
+        type: "decision",
+        title: "Tamper-gated routing memory",
+        summary: "Route matching work through a protected skill.",
+        detail: "## DECISION\n\nUse the protected skill.",
+        tags: ["provenance"],
+        importance: "high",
+        date: "2026-08-29T12:00:00.000Z",
+        score: 80,
+        hit_count: 0,
+        last_used: null,
+        created_at: "2026-08-29T12:00:00.000Z",
+        stale: false,
+        source: "manual",
+        status: "active",
+        required_skills: ["protected-skill"],
+        skill_trigger_tasks: ["protected task"],
+      },
+      projectRoot,
+      { sourceBytes: Buffer.from("routing memory evidence", "utf8") },
+    );
+    const now = new Date().toISOString();
+    const preferencePath = await savePreference(
+      {
+        kind: "routing_preference",
+        target_type: "skill",
+        target: "preferred-skill",
+        preference: "prefer",
+        reason: "Prefer for protected task",
+        confidence: 1,
+        source: "manual",
+        created_at: now,
+        updated_at: now,
+        status: "active",
+        task_hints: ["protected task"],
+      },
+      projectRoot,
+      { sourceBytes: Buffer.from("routing preference evidence", "utf8") },
+    );
+    await writeFile(memoryPath, (await readFile(memoryPath, "utf8")).replace("protected skill", "changed skill"));
+    await writeFile(
+      preferencePath,
+      (await readFile(preferencePath, "utf8")).replace("Prefer for protected task", "Changed reason"),
+    );
+
+    const result = await buildSkillShortlist(projectRoot, { task: "protected task", paths: [] });
+    assert.equal(result.resolved_skills.length, 0);
   });
 });
 

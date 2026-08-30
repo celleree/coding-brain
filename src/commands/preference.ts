@@ -1,17 +1,18 @@
 import { Command } from "commander";
-import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { loadConfig } from "../config.js";
 import { extractPreferenceFromNaturalLanguage } from "../extract-preference.js";
 import { t } from "../i18n.js";
 import { BrainUserError } from "../errors.js";
 import {
-  loadAllPreferences,
   loadStoredPreferenceRecords,
   normalizePreference,
   overwriteStoredPreference,
+  rewriteStoredPreferenceFormatting,
   savePreference,
+  savePreferenceWithSupersessions,
   validatePreference,
+  verifyPreferenceProvenance,
 } from "../store.js";
 import type { Preference } from "../types.js";
 import { PREFERENCE_TARGET_TYPES, PREFERENCE_VALUES } from "../types.js";
@@ -31,6 +32,7 @@ export function register(program: Command): void {
       const projectRoot = await helpers.resolveProjectRoot();
       const { language } = await loadConfig(projectRoot);
       let preference: Preference | null = null;
+      let sourceBytes: Buffer | undefined;
 
       const explicitManual =
         Boolean(options.target?.trim()) &&
@@ -39,6 +41,7 @@ export function register(program: Command): void {
         Boolean(options.reason?.trim());
 
       if (explicitManual) {
+        sourceBytes = Buffer.from(options.reason!.trim(), "utf8");
         const now = new Date().toISOString();
         preference = {
           kind: "routing_preference",
@@ -55,7 +58,11 @@ export function register(program: Command): void {
       } else {
         let nl = options.input?.trim();
         if (!nl && !input.isTTY) {
-          nl = (await helpers.readStdin()).trim();
+          const payload = await helpers.readStdinPayload();
+          nl = payload.text.trim();
+          sourceBytes = payload.bytes;
+        } else if (nl) {
+          sourceBytes = Buffer.from(options.input ?? nl, "utf8");
         }
         if (nl) {
           preference = extractPreferenceFromNaturalLanguage(nl);
@@ -67,7 +74,7 @@ export function register(program: Command): void {
         }
       }
 
-      const savedPath = await savePreference(preference!, projectRoot);
+      const savedPath = await savePreference(preference!, projectRoot, sourceBytes ? { sourceBytes } : {});
       output.write(`${t("preference.saved", language, { path: savedPath })}\n`);
     });
 
@@ -149,35 +156,17 @@ export function register(program: Command): void {
         source: "manual",
         created_at: now,
         updated_at: now,
-        status: "active",
+        status: "candidate",
         valid_from: now.slice(0, 10),
         observed_at: now,
         review_state: "cleared",
       };
-      const savedPath = await savePreference(newPref, projectRoot);
-      const newRelative = path.relative(projectRoot, savedPath).replace(/\\/g, "/");
-
-      let count = 0;
-      const records = await loadStoredPreferenceRecords(projectRoot);
-      for (const rec of records) {
-        if (rec.filePath === savedPath) {
-          continue;
-        }
-        if (rec.preference.target === oldTarget.trim() && rec.preference.status === "active") {
-          await overwriteStoredPreference({
-            ...rec,
-            preference: normalizePreference({
-              ...rec.preference,
-              status: "superseded",
-              superseded_by: newRelative,
-              updated_at: new Date().toISOString(),
-              valid_until: rec.preference.valid_until ?? new Date().toISOString(),
-              supersession_reason: rec.preference.supersession_reason ?? "Superseded via brain supersede-preference",
-            }),
-          });
-          count += 1;
-        }
-      }
+      const { filePath: savedPath, supersededCount: count } = await savePreferenceWithSupersessions(
+        newPref,
+        projectRoot,
+        oldTarget,
+        { sourceBytes: Buffer.from(options.reason!.trim(), "utf8") },
+      );
 
       output.write(`Superseded ${count} old preference(s). New preference saved to: ${savedPath}\n`);
     });
@@ -189,11 +178,14 @@ export function register(program: Command): void {
     .description("Validate all preference files against schema.")
     .action(async () => {
       const projectRoot = await helpers.resolveProjectRoot();
-      const preferences = await loadAllPreferences(projectRoot);
+      const records = await loadStoredPreferenceRecords(projectRoot);
       let errors = 0;
-      for (const p of preferences) {
+      for (const record of records) {
+        const p = record.preference;
         try {
           validatePreference(p);
+          const provenance = await verifyPreferenceProvenance(projectRoot, p, record.relativePath);
+          if (!provenance.ok) throw new Error(provenance.reason);
         } catch (e: any) {
           process.stderr.write(`Lint error in preference for ${p.target}: ${e.message}\n`);
           errors++;
@@ -216,7 +208,7 @@ export function register(program: Command): void {
       const projectRoot = await helpers.resolveProjectRoot();
       const records = await loadStoredPreferenceRecords(projectRoot);
       for (const rec of records) {
-        await overwriteStoredPreference(rec);
+        await rewriteStoredPreferenceFormatting(rec);
       }
       output.write(`Normalized ${records.length} preference(s).\n`);
     });

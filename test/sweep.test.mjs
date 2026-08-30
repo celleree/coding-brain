@@ -4,11 +4,21 @@ import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promi
 import os from "node:os";
 import path from "node:path";
 
-import { loadConfig, loadStoredMemoryRecords, renderConfigWarnings, saveMemory, initBrain } from "../dist/store-api.js";
+import {
+  loadConfig,
+  loadStoredMemoryRecords,
+  renderConfigWarnings,
+  saveMemory as saveMemoryRecord,
+  initBrain,
+} from "../dist/store-api.js";
 import { buildInjection } from "../dist/inject.js";
 import { applySweepAuto, renderSweepDryRun, scanSweepCandidates } from "../dist/sweep.js";
 
 const repoRoot = process.cwd();
+
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
 
 await runTest("sweep config fields default safely and invalid values emit warnings", async () => {
   await withTempRepo(async (projectRoot) => {
@@ -232,10 +242,8 @@ await runTest("sweep auto deletes, downgrades, archives, and keeps duplicate war
     const downgraded = records.find((entry) => entry.memory.title === "Keep auth writes transactional");
     assert.ok(downgraded);
     assert.equal(downgraded.memory.importance, "medium");
-    assert.match(
-      downgraded.memory.detail,
-      /<!-- brain-sweep: \d{4}-\d{2}-\d{2} 超过 90 天未更新，importance 已降权 -->/,
-    );
+    assert.equal(downgraded.memory.detail, "## DECISION\n\nKeep auth writes transactional.");
+    assert.equal(downgraded.memory.updated, "2026-04-02");
 
     const duplicates = records.filter(
       (entry) => /stateless auth/i.test(entry.memory.title) || /jwt/i.test(entry.memory.title),

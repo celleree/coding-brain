@@ -10,8 +10,8 @@ import {
   loadStoredMemoryRecords,
   reviewCandidateMemories,
   reviewCandidateMemory,
-  saveMemory,
 } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 await runTest("accepts a novel memory when no strong overlap exists", async () => {
   await withTempRepo(async (projectRoot) => {

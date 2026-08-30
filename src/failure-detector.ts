@@ -15,6 +15,8 @@ export type FailureEvent = {
   relatedMemoryFile?: string;
   suggestedAction: "boost_score" | "rewrite_memory" | "extract_new";
   draftContent?: string;
+  /** Raw source episode that caused this failure event. */
+  source_episode?: string;
 };
 
 type ParsedFailureEvent = {

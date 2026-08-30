@@ -11,11 +11,15 @@ import {
   isMemoryCurrentlyValid,
   loadStoredMemoryRecords,
   normalizeMemory,
-  saveMemory,
+  saveMemory as saveMemoryRecord,
   serializeMemory,
   supersedeMemoryPair,
 } from "../dist/store-api.js";
 import { buildSkillShortlist } from "../dist/suggest-skills.js";
+
+function saveMemory(memory, projectRoot, provenance) {
+  return saveMemoryRecord(memory, projectRoot, provenance ?? { sourceBytes: Buffer.from(memory.detail, "utf8") });
+}
 
 const DEFAULT_BRAIN_CONFIG = {
   workflowMode: "recommended-semi-auto",
@@ -192,7 +196,7 @@ await runTest("buildMemoryEvolutionChain orders oldest to newest along supersede
   });
 });
 
-await runTest("normalizeMemorySchemas fills missing temporal fields on disk", async () => {
+await runTest("normalizeMemorySchemas leaves unsourced temporal records unchanged", async () => {
   await withTempRepo(async (projectRoot) => {
     const brainDir = path.join(projectRoot, ".brain");
     const memPath = path.join(brainDir, "decisions", "2026-04-05-legacy.md");
@@ -218,10 +222,13 @@ await runTest("normalizeMemorySchemas fills missing temporal fields on disk", as
     const before = await readFile(memPath, "utf8");
     assert.ok(!before.includes("valid_from:"));
 
-    await normalizeMemorySchemas(projectRoot);
+    const result = await normalizeMemorySchemas(projectRoot);
     const after = await readFile(memPath, "utf8");
-    assert.ok(after.includes("valid_from:"));
-    assert.ok(after.includes("observed_at:"));
+    const file = result.files.find((entry) => entry.file_path === memPath);
+    assert.ok(file);
+    assert.equal(file.fixable, false);
+    assert.match(JSON.stringify(file.issues), /missing_provenance/);
+    assert.equal(after, before);
   });
 });
 

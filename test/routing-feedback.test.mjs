@@ -9,14 +9,27 @@ const repoRoot = process.cwd();
 const cliPath = path.join(repoRoot, "dist", "cli.js");
 
 import {
-  applyRoutingFeedback,
+  applyRoutingFeedback as applyRoutingFeedbackRecord,
   initBrain,
   loadAllPreferences,
   loadStoredPreferenceRecords,
   parseRoutingFeedbackStdin,
-  savePreference,
+  savePreference as savePreferenceRecord,
   shouldProcessRoutingFeedbackEvent,
 } from "../dist/store-api.js";
+
+function applyRoutingFeedback(projectRoot, events, provenance) {
+  const sourceBytes = Buffer.from(events.map((event) => event.notes ?? event.type).join("\n"), "utf8");
+  return applyRoutingFeedbackRecord(projectRoot, events, provenance ?? { sourceBytes });
+}
+
+function savePreference(preference, projectRoot, provenance) {
+  return savePreferenceRecord(
+    preference,
+    projectRoot,
+    provenance ?? { sourceBytes: Buffer.from(preference.reason, "utf8") },
+  );
+}
 
 await runTest("parseRoutingFeedbackStdin accepts JSON array and NDJSON", () => {
   const a = parseRoutingFeedbackStdin(
@@ -84,9 +97,12 @@ await runTest("positive feedback bumps prefer confidence when safe", async () =>
     ]);
     assert.ok(result.applied.some((x) => x.kind === "preference_confidence_bumped"));
     const records = await loadStoredPreferenceRecords(tmpDir);
-    const j = records.find((r) => r.preference.target === "jest");
+    const j = records.find((r) => r.preference.target === "jest" && r.preference.status === "active");
+    const old = records.find((r) => r.preference.target === "jest" && r.preference.status === "superseded");
     assert.ok(j);
     assert.ok((j.preference.confidence ?? 0) > 0.7);
+    assert.ok(old);
+    assert.notEqual(j.preference.source_episode, old.preference.source_episode);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }

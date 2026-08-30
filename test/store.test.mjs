@@ -11,9 +11,9 @@ import {
   loadConfig,
   loadStoredMemoryRecords,
   renderConfigWarnings,
-  saveMemory,
   updateIndex,
 } from "../dist/store-api.js";
+import { saveMemory } from "./provenance-fixtures.mjs";
 
 const repoRoot = process.cwd();
 

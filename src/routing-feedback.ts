@@ -2,8 +2,14 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { getBrainDir } from "./config.js";
-import type { Preference, StoredPreferenceRecord } from "./types.js";
-import { initBrain, loadStoredPreferenceRecords, overwriteStoredPreference, savePreference } from "./store.js";
+import type { Preference } from "./types.js";
+import {
+  initBrain,
+  loadStoredPreferenceRecords,
+  persistSourceBytes,
+  savePreference,
+  savePreferenceWithSupersessions,
+} from "./store.js";
 import { appendRoutingFeedbackReminders, type RoutingFeedbackReminder } from "./reinforce-pending.js";
 
 export const ROUTING_FEEDBACK_EVENT_TYPES = [
@@ -197,10 +203,17 @@ export function shouldProcessRoutingFeedbackEvent(event: RoutingFeedbackEvent): 
 export async function applyRoutingFeedback(
   projectRoot: string,
   events: RoutingFeedbackEvent[],
+  options: { sourceEpisode?: string; sourceBytes?: Uint8Array } = {},
 ): Promise<RoutingFeedbackApplyResult> {
   const applied: RoutingFeedbackAppliedAction[] = [];
   const skipped: Array<{ event: RoutingFeedbackEvent; reason: string }> = [];
   const pending_review: RoutingFeedbackPendingReview[] = [];
+  const sourceEpisode =
+    options.sourceEpisode ??
+    (options.sourceBytes ? await persistSourceBytes(projectRoot, options.sourceBytes) : undefined);
+  if (!sourceEpisode) {
+    throw new Error("Routing feedback requires source bytes or a valid source_episode.");
+  }
 
   for (const event of events) {
     const gate = shouldProcessRoutingFeedbackEvent(event);
@@ -210,16 +223,15 @@ export async function applyRoutingFeedback(
     }
 
     const strength = event.signal_strength ?? 1;
-
     switch (event.type) {
       case "skill_followed":
       case "workflow_success":
-        await handlePositive(projectRoot, event, strength, applied, pending_review);
+        await handlePositive(projectRoot, event, strength, sourceEpisode, applied, pending_review);
         break;
       case "skill_rejected_by_user":
       case "workflow_too_heavy":
       case "workflow_failure":
-        await handleNegative(projectRoot, event, strength, applied, pending_review);
+        await handleNegative(projectRoot, event, strength, sourceEpisode, applied, pending_review);
         break;
       case "skill_ignored":
       case "routing_conflict_escalated":
@@ -237,6 +249,7 @@ async function handlePositive(
   projectRoot: string,
   event: RoutingFeedbackEvent,
   strength: number,
+  sourceEpisode: string,
   applied: RoutingFeedbackAppliedAction[],
   pending_review: RoutingFeedbackPendingReview[],
 ): Promise<void> {
@@ -271,7 +284,7 @@ async function handlePositive(
     return;
   }
 
-  const bump = await tryBumpPreferConfidence(projectRoot, skill, event, strength);
+  const bump = await tryBumpPreferConfidence(projectRoot, skill, strength, sourceEpisode);
   if (bump) {
     applied.push({
       kind: "preference_confidence_bumped",
@@ -298,8 +311,8 @@ async function handlePositive(
 async function tryBumpPreferConfidence(
   projectRoot: string,
   skill: string,
-  event: RoutingFeedbackEvent,
   strength: number,
+  sourceEpisode: string,
 ): Promise<{ detail: string } | null> {
   const records = await loadStoredPreferenceRecords(projectRoot);
   const matches = records.filter(
@@ -337,18 +350,24 @@ async function tryBumpPreferConfidence(
   const delta = CONFIDENCE_BUMP * strength;
   const next = Math.min(MAX_AUTO_CONFIDENCE, current + delta);
   const now = new Date().toISOString();
-  const updated: StoredPreferenceRecord = {
-    ...latest,
-    preference: {
-      ...latest.preference,
-      confidence: next,
-      updated_at: now,
-      reason:
-        `${latest.preference.reason.trim()}\n\n> Routing feedback (${event.type}): ${event.notes?.trim() || "positive signal"}`.trim(),
-    },
+  const {
+    record_digest: _recordDigest,
+    superseded_by: _supersededBy,
+    valid_until: _validUntil,
+    ...previousPreference
+  } = latest.preference;
+  const successor: Preference = {
+    ...previousPreference,
+    confidence: next,
+    source: "routing_feedback",
+    source_episode: sourceEpisode,
+    created_at: now,
+    updated_at: now,
+    observed_at: now,
+    status: "candidate",
+    supersession_reason: null,
   };
-
-  await overwriteStoredPreference(updated);
+  await savePreferenceWithSupersessions(successor, projectRoot, latest.preference.target);
   return { detail: `Bumped prefer confidence for skill "${skill}" from ${current.toFixed(3)} to ${next.toFixed(3)}.` };
 }
 
@@ -356,6 +375,7 @@ async function handleNegative(
   projectRoot: string,
   event: RoutingFeedbackEvent,
   strength: number,
+  sourceEpisode: string,
   applied: RoutingFeedbackAppliedAction[],
   pending_review: RoutingFeedbackPendingReview[],
 ): Promise<void> {
@@ -421,6 +441,7 @@ async function handleNegative(
     created_at: now,
     updated_at: now,
     status: "candidate",
+    source_episode: sourceEpisode,
   };
 
   const savedPath = await savePreference(pref, projectRoot);

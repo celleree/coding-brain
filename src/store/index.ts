@@ -14,10 +14,22 @@ export {
   loadAllPreferences,
   loadStoredPreferenceRecords,
   overwriteStoredPreference,
+  rewriteStoredPreferenceFormatting,
   parsePreference,
   savePreference,
+  savePreferenceWithSupersessions,
   serializePreference,
+  supersedePreferencePair,
 } from "./preference-store.js";
+export {
+  attestMemoryRecord,
+  attestPreferenceRecord,
+  persistSourceBytes,
+  prepareSourceBlobWrite,
+  verifyMemoryProvenance,
+  verifyPreferenceProvenance,
+  verifySourceEpisode,
+} from "./source-store.js";
 export { loadActivityState, recordInjectedMemories } from "./activity.js";
 export {
   loadMemoryIndexCache,
@@ -33,7 +45,7 @@ export {
   quoteYaml,
   serializeMemory,
 } from "./serialize.js";
-export { AtomicWriteOperation, commitAtomicWriteOperations } from "./atomic-write.js";
+export { AtomicWriteOperation, commitAtomicWriteOperations, createAtomicWriteOperation } from "./atomic-write.js";
 export {
   DEFAULT_GOAL_STATUS,
   DEFAULT_INVOCATION_MODE,
