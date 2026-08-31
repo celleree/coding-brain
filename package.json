@@ -32,6 +32,8 @@
     ".claude-plugin/plugin.json",
     ".claude-plugin/mcp.json",
     ".codex/INSTALL.md",
+    ".codex/session-start-prompt.md",
+    ".codex/global-routing-policy.md",
     "scripts/setup-git-hooks.sh",
     "scripts/generate-demo-proof.mjs",
     "scripts/generate-proof-bundles.mjs",

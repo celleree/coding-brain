@@ -1,15 +1,11 @@
 # Codex Session Start
 
-Before starting a new coding session in this repository, run:
+Before substantial coding work:
 
-```bash
-brain inject
-```
+1. Run `brain start --format json --task "<current task>"` for a new session, or `brain conversation-start --format json --task "<current task>" --path <changed-path>` for a fresh conversation in an existing workstream.
+2. Read `.codex/global-routing-policy.md`.
+3. Before handing work to Codex, state the selected `WHERE`, `SESSION`, `MODEL`, `REASONING`, and `PARALLEL` values.
 
-Use the output as repo knowledge context for the session. It helps Codex see the latest project decisions, gotchas, and conventions before suggesting changes.
+Treat those values as task-specific routing decisions, not fixed defaults. Prefer the lowest-cost capable model/reasoning level, safe parallel work, and fresh implementation/review conversations when they improve context quality.
 
-If you have not initialized Project Brain yet, run:
-
-```bash
-brain init
-```
+If RepoBrain is not initialized yet, run `brain setup`.
