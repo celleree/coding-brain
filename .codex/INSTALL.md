@@ -33,17 +33,17 @@ brain setup
 
 `brain setup` also installs the lightweight `post-commit` hook when you run it from the Git root. If you only want the workspace without automation, `brain init` still works.
 
-## 3. Load repo context before a new Codex session
+## 3. Start Codex with context + routing
 
-The simplest option is still:
+Use `.codex/session-start-prompt.md` as the lightweight session entrypoint. It loads RepoBrain context and applies `.codex/global-routing-policy.md` so each substantial task explicitly chooses:
 
-```bash
-brain inject
-```
+- Codex surface: VS Code sidebar / Terminal-CLI / Desktop app
+- continue vs fresh session
+- lowest-cost capable model and reasoning level
+- safe parallel execution where appropriate
+- fresh implementation/review conversations when useful
 
-Paste or reference the output in your session so Codex starts with the latest repo decisions, gotchas, and conventions.
-
-If you wire in the session-start hook, this step can be automatic.
+The values are task-specific decisions, not fixed examples.
 
 ## 4. Install the lightweight Git hook
 
