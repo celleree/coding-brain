@@ -66,9 +66,19 @@ await runTest("brain reinforce applies actions immediately with --yes", async ()
     assert.match(result.stdout, /\[brain\] reinforcement complete: boosted=1, rewritten=0, extracted=1/);
 
     const existingRaw = await readFile(existingPath, "utf8");
-    assert.match(existingRaw, /score: 75/);
+    assert.match(existingRaw, /score: 60/);
+    assert.match(existingRaw, /status: "superseded"/);
 
     const records = await loadStoredMemoryRecords(projectRoot);
+    const successor = records.find(
+      (entry) =>
+        entry.filePath !== existingPath &&
+        entry.memory.title === "Keep payment writes inside the transaction helper" &&
+        entry.memory.status === "active",
+    );
+    assert.ok(successor);
+    assert.equal(successor?.memory.score, 75);
+
     const extracted = records.find((entry) => entry.memory.origin === "failure");
     assert.ok(extracted);
   });
