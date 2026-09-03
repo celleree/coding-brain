@@ -1,6 +1,6 @@
 # Global Codex Working Rules
 
-Use these as personal defaults across repositories. Repository-specific `AGENTS.md` files and canonical project sources may add stricter rules.
+Use these as personal defaults across repositories. Repository-specific `AGENTS.md` files and canonical project sources are more specific and override these personal defaults when they conflict. Direct task or prompt instructions remain authoritative when they explicitly supersede a default.
 
 ## Default work style
 
