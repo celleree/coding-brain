@@ -37,14 +37,18 @@ brain setup
 
 This repository includes `.codex/global-AGENTS.md` as the reusable personal Codex instruction source.
 
-Install it into the Codex home directory so the same bounded ChatGPT <-> Codex handoff, review-depth, parallel-work, PR-reviewability, and durable-learning defaults apply across repositories:
+Install it into the Codex home directory so the same bounded ChatGPT <-> Codex handoff, review-depth, parallel-work, PR-reviewability, and durable-learning defaults apply across repositories.
+
+If `~/.codex/AGENTS.md` already contains personal instructions, merge the new rules deliberately instead of overwriting them. The following command copies the file only when no existing personal file is present:
 
 ```bash
 mkdir -p ~/.codex
-cp .codex/global-AGENTS.md ~/.codex/AGENTS.md
+if [ -e ~/.codex/AGENTS.md ]; then
+  echo "Existing ~/.codex/AGENTS.md found; merge .codex/global-AGENTS.md into it manually."
+else
+  cp .codex/global-AGENTS.md ~/.codex/AGENTS.md
+fi
 ```
-
-If `~/.codex/AGENTS.md` already contains personal instructions, merge the new rules deliberately instead of overwriting them blindly.
 
 The global file contains reusable defaults only. A repository's own `AGENTS.md` and canonical sources may add stricter project-specific requirements.
 
@@ -53,10 +57,12 @@ The ChatGPT-side routing header should be supplied whenever ChatGPT prepares a C
 ```text
 CODEX MODEL: [recommended model]
 CHAT NAME: [specific session/chat name]
-REASONING: [light / medium / high / extra high / ultra]
+REASONING: [supported reasoning level for the selected model]
 PARALLEL: YES | NO
 WHY: [one sentence]
 ```
+
+Use a reasoning level actually supported by the selected model. Keep separate multi-agent or orchestration modes out of the `REASONING` field; `PARALLEL` records whether the task itself is safe to run concurrently.
 
 These routing fields are selected by ChatGPT/the human before launching or continuing the Codex session; Codex should not invent them after the fact.
 
