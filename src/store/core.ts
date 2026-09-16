@@ -3,12 +3,14 @@ import path from "node:path";
 
 import { getBrainDir, hasBrain, writeDefaultConfig } from "../config.js";
 import { ensureSessionRuntimeLayout } from "../session-profile.js";
+import { ensureOrchestratorStorageLayout } from "./orchestrator-store.js";
 
 export async function initBrain(projectRoot: string): Promise<void> {
   const brainDir = getBrainDir(projectRoot);
   const existedBeforeInit = await hasBrain(projectRoot);
   await mkdir(brainDir, { recursive: true });
   await ensureSessionRuntimeLayout(projectRoot);
+  await ensureOrchestratorStorageLayout(projectRoot);
   await Promise.all([
     mkdir(path.join(brainDir, "decisions"), { recursive: true }),
     mkdir(path.join(brainDir, "gotchas"), { recursive: true }),
