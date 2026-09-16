@@ -391,9 +391,7 @@ function optionalPhasePosition(value: unknown, field: string): OrchestratorPhase
 
 function controllersEqual(left: OrchestratorController, right: OrchestratorController): boolean {
   return (
-    left.platform === right.platform &&
-    left.controller_id === right.controller_id &&
-    left.surface === right.surface
+    left.platform === right.platform && left.controller_id === right.controller_id && left.surface === right.surface
   );
 }
 
