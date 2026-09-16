@@ -22,7 +22,6 @@ import {
   type OrchestratorStatus,
 } from "../orchestrator-lifecycle.js";
 import { createAtomicWriteOperation, type AtomicWriteOperation } from "./atomic-write.js";
-import { isNonEmptyIsoDateString } from "./validate.js";
 
 export const ORCHESTRATOR_STORAGE_DIRECTORY = "orchestration" as const;
 export const ORCHESTRATOR_HANDOFFS_DIRECTORY = "handoffs" as const;
@@ -37,6 +36,9 @@ const REPOSITORY_FACT_KINDS = [
   "deployment",
   "other",
 ] as const satisfies readonly OrchestratorRepositoryFactKind[];
+
+const ORCHESTRATOR_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-](\d{2}):(\d{2}))$/;
 
 export type CurrentOrchestratorWritePrecondition =
   | { kind: "create-only" }
@@ -427,8 +429,42 @@ function optionalNonEmptyString(value: unknown, field: string): string | undefin
 
 function requireTimestamp(value: unknown, field: string): string {
   const timestamp = requireNonEmptyString(value, field);
-  if (!isNonEmptyIsoDateString(timestamp)) invalid(field, "must be a valid timestamp");
+  if (!isStrictOrchestratorTimestamp(timestamp)) {
+    invalid(field, "must be a valid ISO-8601 timestamp with an explicit timezone");
+  }
   return timestamp;
+}
+
+function isStrictOrchestratorTimestamp(value: string): boolean {
+  const match = ORCHESTRATOR_TIMESTAMP_PATTERN.exec(value);
+  if (match === null) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return false;
+  if (hour > 23 || minute > 59 || second > 59) return false;
+
+  if (match[8] !== "Z") {
+    const offsetHour = Number(match[9]);
+    const offsetMinute = Number(match[10]);
+    if (offsetHour > 23 || offsetMinute > 59) return false;
+  }
+
+  return true;
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }
 
 function optionalTimestamp(value: unknown, field: string): string | undefined {
