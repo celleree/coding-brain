@@ -104,4 +104,5 @@ export const reviewCandidateMemory = reviewCandidateMemoryImpl;
  */
 export const reviewCandidateMemories = reviewCandidateMemoriesImpl;
 
+export * from "./orchestrator-lifecycle.js";
 export * from "./types.js";
