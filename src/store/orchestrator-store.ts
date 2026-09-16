@@ -227,9 +227,17 @@ function validateEpoch(value: unknown): OrchestratorEpoch {
 
 function validateStatus(value: unknown): OrchestratorStatus {
   const status = requireObject(value, "checkpoint.status");
-  assertKnownKeys(status, ["contract_version", "epoch_id", "controller", "signals", "rotation_state", "evaluated_at"], "checkpoint.status");
+  assertKnownKeys(
+    status,
+    ["contract_version", "epoch_id", "controller", "signals", "rotation_state", "evaluated_at"],
+    "checkpoint.status",
+  );
   requireExact(status.contract_version, ORCHESTRATOR_LIFECYCLE_CONTRACT_VERSION, "checkpoint.status.contract_version");
-  const rotationState = requireEnum(status.rotation_state, ORCHESTRATOR_ROTATION_STATES, "checkpoint.status.rotation_state");
+  const rotationState = requireEnum(
+    status.rotation_state,
+    ORCHESTRATOR_ROTATION_STATES,
+    "checkpoint.status.rotation_state",
+  );
   return {
     contract_version: ORCHESTRATOR_LIFECYCLE_CONTRACT_VERSION,
     epoch_id: requireNonEmptyString(status.epoch_id, "checkpoint.status.epoch_id"),
@@ -321,7 +329,11 @@ function validateHostContextPressure(value: unknown): OrchestratorHostContextPre
 
 function validateRepositoryObservation(value: unknown): OrchestratorRepositoryObservation {
   const observation = requireObject(value, "checkpoint.last_observed_repository_state");
-  assertKnownKeys(observation, ["verification_state", "observed_at", "repository", "facts"], "checkpoint.last_observed_repository_state");
+  assertKnownKeys(
+    observation,
+    ["verification_state", "observed_at", "repository", "facts"],
+    "checkpoint.last_observed_repository_state",
+  );
   requireExact(
     observation.verification_state,
     ORCHESTRATOR_REPOSITORY_OBSERVATION_STATE,
@@ -378,7 +390,11 @@ function optionalPhasePosition(value: unknown, field: string): OrchestratorPhase
 }
 
 function controllersEqual(left: OrchestratorController, right: OrchestratorController): boolean {
-  return left.platform === right.platform && left.controller_id === right.controller_id && left.surface === right.surface;
+  return (
+    left.platform === right.platform &&
+    left.controller_id === right.controller_id &&
+    left.surface === right.surface
+  );
 }
 
 function serializeValidatedCheckpoint(checkpoint: OrchestratorCheckpoint): string {
