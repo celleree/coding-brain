@@ -47,6 +47,22 @@ export {
 } from "./serialize.js";
 export { AtomicWriteOperation, commitAtomicWriteOperations, createAtomicWriteOperation } from "./atomic-write.js";
 export {
+  ensureOrchestratorStorageLayout,
+  getCurrentOrchestratorCheckpointPath,
+  getHistoricalOrchestratorHandoffPath,
+  getOrchestratorHandoffsDir,
+  getOrchestratorStorageDir,
+  ORCHESTRATOR_CURRENT_FILENAME,
+  ORCHESTRATOR_HANDOFFS_DIRECTORY,
+  ORCHESTRATOR_STORAGE_DIRECTORY,
+  parseOrchestratorCheckpointJson,
+  prepareCurrentOrchestratorCheckpointWrite,
+  prepareHistoricalOrchestratorHandoffWrite,
+  serializeOrchestratorCheckpoint,
+  validateOrchestratorCheckpoint,
+} from "./orchestrator-store.js";
+export type { CurrentOrchestratorWritePrecondition } from "./orchestrator-store.js";
+export {
   DEFAULT_GOAL_STATUS,
   DEFAULT_INVOCATION_MODE,
   DEFAULT_MEMORY_AREA,
