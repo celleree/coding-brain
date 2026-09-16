@@ -150,11 +150,7 @@ describe("orchestrator durable storage foundation", () => {
   });
 
   it("accepts strict persisted ISO timestamps including leap days and numeric offsets", () => {
-    for (const timestamp of [
-      "2026-09-16T22:30:45.123Z",
-      "2028-02-29T12:00:00Z",
-      "2026-09-16T15:30:45-07:00",
-    ]) {
+    for (const timestamp of ["2026-09-16T22:30:45.123Z", "2028-02-29T12:00:00Z", "2026-09-16T15:30:45-07:00"]) {
       const value = checkpoint({ created_at: timestamp });
       expect(validateOrchestratorCheckpoint(value).created_at).toBe(timestamp);
     }
