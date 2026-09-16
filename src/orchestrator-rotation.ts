@@ -62,11 +62,24 @@ function assertThreshold(name: string, value: number): void {
   }
 }
 
+function assertOptionalContextPressureThreshold(
+  name: string,
+  value: OrchestratorContextPressureLevel | undefined,
+): void {
+  if (value !== undefined && !ORCHESTRATOR_CONTEXT_PRESSURE_LEVELS.includes(value)) {
+    throw new Error(
+      `Invalid orchestrator rotation policy: ${name} must be one of ${ORCHESTRATOR_CONTEXT_PRESSURE_LEVELS.join(", ")}.`,
+    );
+  }
+}
+
 export function validateOrchestratorRotationPolicy(policy: Readonly<OrchestratorRotationPolicy>): void {
   assertThreshold("soft_cycle_threshold", policy.soft_cycle_threshold);
   assertThreshold("hard_cycle_ceiling", policy.hard_cycle_ceiling);
   assertThreshold("stale_state_correction_rotate_soon_threshold", policy.stale_state_correction_rotate_soon_threshold);
   assertThreshold("stale_state_correction_rotate_now_threshold", policy.stale_state_correction_rotate_now_threshold);
+  assertOptionalContextPressureThreshold("rotate_soon_context_pressure", policy.rotate_soon_context_pressure);
+  assertOptionalContextPressureThreshold("rotate_now_context_pressure", policy.rotate_now_context_pressure);
 
   if (policy.soft_cycle_threshold > policy.hard_cycle_ceiling) {
     throw new Error("Invalid orchestrator rotation policy: soft cycle threshold exceeds hard cycle ceiling.");

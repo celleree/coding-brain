@@ -126,6 +126,30 @@ describe("orchestrator rotation evaluator", () => {
     expect(evaluateOrchestratorRotation(highPressure, policy).rotation_state).toBe("ROTATE_NOW");
   });
 
+  it("rejects an unknown runtime rotate-soon context-pressure threshold", () => {
+    const policy = {
+      ...DEFAULT_ORCHESTRATOR_ROTATION_POLICY,
+      rotate_soon_context_pressure: "INVALID",
+    };
+    const signals = baseSignals({ host_context_pressure: hostPressure("LOW") });
+
+    expect(() => evaluateOrchestratorRotation(signals, policy)).toThrow(
+      /Invalid orchestrator rotation policy: rotate_soon_context_pressure/,
+    );
+  });
+
+  it("rejects an unknown runtime rotate-now context-pressure threshold", () => {
+    const policy = {
+      ...DEFAULT_ORCHESTRATOR_ROTATION_POLICY,
+      rotate_now_context_pressure: "INVALID",
+    };
+    const signals = baseSignals({ host_context_pressure: hostPressure("LOW") });
+
+    expect(() => evaluateOrchestratorRotation(signals, policy)).toThrow(
+      /Invalid orchestrator rotation policy: rotate_now_context_pressure/,
+    );
+  });
+
   it("returns all applicable reasons deterministically and gives ROTATE_NOW precedence", () => {
     const result = evaluateOrchestratorRotation(
       baseSignals({
