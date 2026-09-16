@@ -149,6 +149,63 @@ describe("orchestrator durable storage foundation", () => {
     );
   });
 
+  it("accepts strict persisted ISO timestamps including leap days and numeric offsets", () => {
+    for (const timestamp of [
+      "2026-09-16T22:30:45.123Z",
+      "2028-02-29T12:00:00Z",
+      "2026-09-16T15:30:45-07:00",
+    ]) {
+      const value = checkpoint({ created_at: timestamp });
+      expect(validateOrchestratorCheckpoint(value).created_at).toBe(timestamp);
+    }
+  });
+
+  it("rejects malformed, normalized, or incomplete persisted timestamps", () => {
+    for (const timestamp of [
+      "0",
+      "September 16, 2026",
+      "2026-02-30T12:00:00Z",
+      "random invalid text",
+      "2027-02-29T12:00:00Z",
+      "2026-13-16T22:30:45Z",
+      "2026-09-00T22:30:45Z",
+      "2026-09-16T24:30:45Z",
+      "2026-09-16T22:60:45Z",
+      "2026-09-16T22:30:60Z",
+      "2026-09-16T22:30:45+24:00",
+      "2026-09-16T22:30:45+07:60",
+      "2026-09-16T22:30:45+0700",
+      "2026-09-16T22:30:45",
+      "2026-09-16",
+    ]) {
+      const value = checkpoint({ created_at: timestamp });
+      expect(() => validateOrchestratorCheckpoint(value), timestamp).toThrow(/checkpoint\.created_at/);
+    }
+  });
+
+  it("applies strict persisted timestamp validation consistently to nested lifecycle fields", () => {
+    const invalidTimestamp = "2026-02-30T12:00:00Z";
+    const cases = [
+      ["checkpoint.epoch.started_at", (value) => (value.epoch.started_at = invalidTimestamp)],
+      ["checkpoint.epoch.closed_at", (value) => (value.epoch.closed_at = invalidTimestamp)],
+      ["checkpoint.status.evaluated_at", (value) => (value.status.evaluated_at = invalidTimestamp)],
+      [
+        "checkpoint.status.signals.host_context_pressure.reported_at",
+        (value) => (value.status.signals.host_context_pressure.reported_at = invalidTimestamp),
+      ],
+      [
+        "checkpoint.last_observed_repository_state.observed_at",
+        (value) => (value.last_observed_repository_state.observed_at = invalidTimestamp),
+      ],
+    ];
+
+    for (const [field, mutate] of cases) {
+      const value = checkpoint();
+      mutate(value);
+      expect(() => validateOrchestratorCheckpoint(value), field).toThrow(field);
+    }
+  });
+
   it("rejects unsupported lifecycle versions and checkpoint kinds", () => {
     const wrongVersion = checkpoint({ contract_version: "repobrain.orchestrator-lifecycle.v2" });
     const wrongKind = checkpoint({ kind: "wrong" });
