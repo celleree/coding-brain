@@ -6,7 +6,7 @@ import type {
   OrchestratorController,
   OrchestratorPhasePosition,
 } from "./orchestrator-lifecycle.js";
-import { commitAtomicWriteOperations } from "./store/atomic-write.js";
+import { commitAtomicWriteOperations, createAtomicContentPreconditionOperation } from "./store/atomic-write.js";
 import {
   ensureOrchestratorStorageLayout,
   getCurrentOrchestratorCheckpointPath,
@@ -70,11 +70,16 @@ export async function startOrchestratorEpoch(
   }
 
   validateOrchestratorEpochLinkage(current.checkpoint, proposed);
+  const predecessorHistoryPath = getHistoricalOrchestratorHandoffPath(
+    projectRoot,
+    current.checkpoint.epoch.epoch_id,
+  );
   await commitAtomicWriteOperations([
     prepareCurrentOrchestratorCheckpointWrite(projectRoot, proposed, {
       kind: "replace",
       expectedContent: current.raw,
     }),
+    createAtomicContentPreconditionOperation(predecessorHistoryPath, predecessorHistory.raw),
   ]);
   return proposed;
 }
@@ -267,6 +272,9 @@ function assertActiveCurrentCheckpoint(checkpoint: OrchestratorCheckpoint): void
   if (checkpoint.epoch.successor_epoch_id !== undefined) {
     fail(`active current epoch "${checkpoint.epoch.epoch_id}" already declares a successor`);
   }
+  if (checkpoint.epoch.phase_at_close !== undefined) {
+    fail(`active current epoch "${checkpoint.epoch.epoch_id}" must not set epoch.phase_at_close`);
+  }
 }
 
 function assertOpenCheckpoint(checkpoint: OrchestratorCheckpoint, context: string): void {
@@ -275,6 +283,9 @@ function assertOpenCheckpoint(checkpoint: OrchestratorCheckpoint, context: strin
   }
   if (checkpoint.epoch.successor_epoch_id !== undefined) {
     fail(`${context} must not assign epoch.successor_epoch_id`);
+  }
+  if (checkpoint.epoch.phase_at_close !== undefined) {
+    fail(`${context} must not set epoch.phase_at_close`);
   }
 }
 
