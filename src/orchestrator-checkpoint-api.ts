@@ -70,10 +70,7 @@ export async function startOrchestratorEpoch(
   }
 
   validateOrchestratorEpochLinkage(current.checkpoint, proposed);
-  const predecessorHistoryPath = getHistoricalOrchestratorHandoffPath(
-    projectRoot,
-    current.checkpoint.epoch.epoch_id,
-  );
+  const predecessorHistoryPath = getHistoricalOrchestratorHandoffPath(projectRoot, current.checkpoint.epoch.epoch_id);
   await commitAtomicWriteOperations([
     prepareCurrentOrchestratorCheckpointWrite(projectRoot, proposed, {
       kind: "replace",
