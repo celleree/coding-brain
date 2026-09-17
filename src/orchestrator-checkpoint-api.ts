@@ -28,9 +28,7 @@ const COMPARABLE_TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/;
 
 /** Read the current durable orchestrator checkpoint, or null when none exists. */
-export async function readCurrentOrchestratorCheckpoint(
-  projectRoot: string,
-): Promise<OrchestratorCheckpoint | null> {
+export async function readCurrentOrchestratorCheckpoint(projectRoot: string): Promise<OrchestratorCheckpoint | null> {
   const stored = await readCurrentStoredCheckpoint(projectRoot);
   return stored?.checkpoint ?? null;
 }
@@ -66,10 +64,7 @@ export async function startOrchestratorEpoch(
     fail(`cannot start epoch "${proposed.epoch.epoch_id}" while the current epoch is active`);
   }
 
-  const predecessorHistory = await readHistoricalOrchestratorHandoff(
-    projectRoot,
-    current.checkpoint.epoch.epoch_id,
-  );
+  const predecessorHistory = await readHistoricalOrchestratorHandoff(projectRoot, current.checkpoint.epoch.epoch_id);
   if (!checkpointsEquivalent(current.checkpoint, predecessorHistory.checkpoint)) {
     fail("closed current checkpoint and historical predecessor handoff disagree");
   }
@@ -192,13 +187,9 @@ export async function findLatestCompletedOrchestratorHandoff(
       fail(`historical handoff "${entry.name}" contains an open epoch`);
     }
 
-    const expectedFilename = path.basename(
-      getHistoricalOrchestratorHandoffPath(projectRoot, candidate.epoch.epoch_id),
-    );
+    const expectedFilename = path.basename(getHistoricalOrchestratorHandoffPath(projectRoot, candidate.epoch.epoch_id));
     if (entry.name !== expectedFilename) {
-      fail(
-        `historical handoff filename "${entry.name}" does not match epoch "${candidate.epoch.epoch_id}" identity`,
-      );
+      fail(`historical handoff filename "${entry.name}" does not match epoch "${candidate.epoch.epoch_id}" identity`);
     }
 
     const completionInstant = timestampInstantNanoseconds(candidate.epoch.closed_at);
@@ -235,10 +226,7 @@ async function requireCurrentStoredCheckpoint(projectRoot: string): Promise<Stor
   return current;
 }
 
-async function readHistoricalOrchestratorHandoff(
-  projectRoot: string,
-  epochId: string,
-): Promise<StoredCheckpoint> {
+async function readHistoricalOrchestratorHandoff(projectRoot: string, epochId: string): Promise<StoredCheckpoint> {
   const historicalPath = getHistoricalOrchestratorHandoffPath(projectRoot, epochId);
   let raw: string;
   try {
@@ -262,9 +250,7 @@ async function readHistoricalOrchestratorHandoff(
 
 function assertExpectedCheckpoint(current: OrchestratorCheckpoint, expectedCheckpointId: string): void {
   if (current.checkpoint_id !== expectedCheckpointId) {
-    fail(
-      `stale checkpoint identity: expected "${expectedCheckpointId}" but current is "${current.checkpoint_id}"`,
-    );
+    fail(`stale checkpoint identity: expected "${expectedCheckpointId}" but current is "${current.checkpoint_id}"`);
   }
 }
 
@@ -312,9 +298,7 @@ function assertSameEpochOpeningIdentity(current: OrchestratorCheckpoint, propose
 
 function controllersEqual(left: OrchestratorController, right: OrchestratorController): boolean {
   return (
-    left.platform === right.platform &&
-    left.controller_id === right.controller_id &&
-    left.surface === right.surface
+    left.platform === right.platform && left.controller_id === right.controller_id && left.surface === right.surface
   );
 }
 
@@ -336,8 +320,7 @@ function timestampInstantNanoseconds(timestamp: string): bigint {
     fail(`validated timestamp "${timestamp}" cannot be compared`);
   }
 
-  const [, year, month, day, hour, minute, second, fraction = "", zone, sign, offsetHour, offsetMinute] =
-    match;
+  const [, year, month, day, hour, minute, second, fraction = "", zone, sign, offsetHour, offsetMinute] = match;
   const utcAtLocalSecond = Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
   if (!Number.isFinite(utcAtLocalSecond)) {
     fail(`validated timestamp "${timestamp}" cannot be converted to an instant`);

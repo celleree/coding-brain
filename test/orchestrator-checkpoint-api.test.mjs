@@ -342,9 +342,9 @@ describe("orchestrator checkpoint programmatic API", () => {
     const proposedClose = closeCheckpoint(initial, { checkpointId: "new-close" });
     await expect(closeOrchestratorEpoch(projectRoot, proposedClose, initial.checkpoint_id)).rejects.toBeTruthy();
     expect(await readFile(getCurrentOrchestratorCheckpointPath(projectRoot), "utf8")).toBe(originalBytes);
-    expect(
-      await readFile(getHistoricalOrchestratorHandoffPath(projectRoot, initial.epoch.epoch_id), "utf8"),
-    ).toBe(serializeOrchestratorCheckpoint(existingHistory));
+    expect(await readFile(getHistoricalOrchestratorHandoffPath(projectRoot, initial.epoch.epoch_id), "utf8")).toBe(
+      serializeOrchestratorCheckpoint(existingHistory),
+    );
   });
 
   it("accepts valid reciprocal predecessor/successor linkage", () => {
@@ -382,11 +382,7 @@ describe("orchestrator checkpoint programmatic API", () => {
         checkpoint({ epochId: "epoch-1", successorEpochId: "epoch-3", closedAt: "2026-09-16T20:05:00Z" }),
         validSuccessor,
       ],
-      [
-        "missing predecessor",
-        validPredecessor,
-        checkpoint({ checkpointId: "succ-no-pred", epochId: "epoch-2" }),
-      ],
+      ["missing predecessor", validPredecessor, checkpoint({ checkpointId: "succ-no-pred", epochId: "epoch-2" })],
       [
         "wrong predecessor",
         validPredecessor,
@@ -481,9 +477,7 @@ describe("orchestrator checkpoint programmatic API", () => {
       predecessorEpochId: "epoch-1",
     });
 
-    await expect(startOrchestratorEpoch(projectRoot, successor)).rejects.toThrow(
-      /current checkpoint and historical/,
-    );
+    await expect(startOrchestratorEpoch(projectRoot, successor)).rejects.toThrow(/current checkpoint and historical/);
   });
 
   it("rejects successor start when historical predecessor is missing", async () => {
