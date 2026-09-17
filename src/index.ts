@@ -106,4 +106,5 @@ export const reviewCandidateMemories = reviewCandidateMemoriesImpl;
 
 export * from "./orchestrator-lifecycle.js";
 export * from "./orchestrator-rotation.js";
+export * from "./orchestrator-checkpoint-api.js";
 export * from "./types.js";
