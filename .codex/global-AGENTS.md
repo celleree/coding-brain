@@ -53,6 +53,21 @@ For substantive work coordinated with ChatGPT:
 
 Simple low-risk mechanical work may combine planning and implementation when a separate checkpoint adds no meaningful value.
 
+## Blocker classification
+
+Classify failures before deciding whether work must stop.
+
+Use exactly these operational categories when CI, review, or repository state prevents normal progression:
+
+- `HARD_BLOCKED`: a required executable check actually ran and failed; acceptance criteria are unmet; a material conflicting implementation exists; required permissions/secrets are unavailable; or live repository state changed in a way that invalidates the current task. Stop the affected implementation/merge path until the underlying issue is resolved.
+- `INFRA_BLOCKED`: GitHub Actions or another execution platform failed before meaningful task steps ran. Strong signals include `runner_id: 0`, no assigned runner name, an empty step list, runner provisioning failure, quota/billing exhaustion, or an equivalent platform outage. Do not report this as a code defect. Read-only review and other safe work may continue; final merge remains blocked when green CI is required.
+- `STALE_REVIEW`: the reviewed or expected HEAD changed because a repair or intended follow-up commit was pushed. This is not a defect. Discard the stale review result and perform a fresh exact-HEAD review after the branch stabilizes.
+- `CODE_FAILED`: a shorthand finding under `HARD_BLOCKED` only when build, typecheck, lint, format, tests, smoke checks, or equivalent repository commands actually executed and reported a failure attributable to the change.
+
+Before declaring CI failed because of code, inspect the job metadata or logs far enough to prove that at least one meaningful repository step executed.
+
+Do not let `INFRA_BLOCKED` prevent an otherwise valid independent read-only code review. Do not merge while required executable verification is still infrastructure-blocked.
+
 ## Review depth
 
 Do not create infinite review loops to enumerate every theoretical edge case.
