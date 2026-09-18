@@ -1,7 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+
+const fsReadHooks = vi.hoisted(() => ({ afterReadFile: null }));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    readFile: async (...args) => {
+      const result = await actual.readFile(...args);
+      const hook = fsReadHooks.afterReadFile;
+      if (hook !== null) {
+        await hook(args[0]);
+      }
+      return result;
+    },
+  };
+});
 
 import {
   ORCHESTRATOR_RUNTIME_HEALTH_CONTRACT_VERSION,
@@ -138,6 +155,34 @@ describe("orchestrator C1 runtime health", () => {
     expect(persisted.base_checkpoint_id).toBe("checkpoint-2");
     expect(persisted.signals.meaningful_cycle_count).toBe(9);
     expect(persisted.signals.forced_rotation).toBe(true);
+  });
+
+  it("rejects a runtime mutation if durable current advances after the binding read", async () => {
+    const projectRoot = await tempRoot();
+    const initial = await startActive(projectRoot);
+    const runtimePath = getOrchestratorRuntimeHealthPath(projectRoot);
+    const currentPath = path.join(projectRoot, ".brain", "orchestration", "current.json");
+    const durableSignals = signals({ meaningful_cycle_count: 9, stale_state_correction_count: 1 });
+    const updated = nextCheckpoint(initial, "checkpoint-2", durableSignals);
+
+    fsReadHooks.afterReadFile = async (targetPath) => {
+      if (String(targetPath) !== currentPath) return;
+      fsReadHooks.afterReadFile = null;
+      await writeOrchestratorCheckpoint(projectRoot, updated, initial.checkpoint_id);
+    };
+
+    try {
+      await expect(mutateOrchestratorRuntimeHealth(projectRoot, { type: "FORCED_ROTATION" })).rejects.toThrow(
+        /Atomic write precondition failed because .*current\.json.*changed/,
+      );
+    } finally {
+      fsReadHooks.afterReadFile = null;
+    }
+
+    await expect(stat(runtimePath)).rejects.toMatchObject({ code: "ENOENT" });
+    const rebased = await readOrchestratorRuntimeHealth(projectRoot);
+    expect(rebased.base_checkpoint_id).toBe("checkpoint-2");
+    expect(rebased.signals).toEqual(durableSignals);
   });
 
   it("does not leak predecessor runtime signals into a successor epoch", async () => {

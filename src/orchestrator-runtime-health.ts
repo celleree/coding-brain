@@ -8,10 +8,17 @@ import {
   type OrchestratorPhaseBoundarySignal,
   type OrchestratorRotationSignals,
 } from "./orchestrator-lifecycle.js";
-import { readCurrentOrchestratorCheckpoint } from "./orchestrator-checkpoint-api.js";
 import { ensureSessionRuntimeLayout, getRuntimeDir } from "./session-profile.js";
-import { commitAtomicWriteOperations, createAtomicWriteOperation } from "./store/atomic-write.js";
-import { validateOrchestratorRotationSignals } from "./store/orchestrator-store.js";
+import {
+  commitAtomicWriteOperations,
+  createAtomicContentPreconditionOperation,
+  createAtomicWriteOperation,
+} from "./store/atomic-write.js";
+import {
+  getCurrentOrchestratorCheckpointPath,
+  parseOrchestratorCheckpointJson,
+  validateOrchestratorRotationSignals,
+} from "./store/orchestrator-store.js";
 
 export const ORCHESTRATOR_RUNTIME_HEALTH_CONTRACT_VERSION = "repobrain.orchestrator-runtime-health.v1" as const;
 export const ORCHESTRATOR_RUNTIME_HEALTH_KIND = "repobrain.orchestrator_runtime_health" as const;
@@ -51,6 +58,8 @@ interface ActiveBinding {
   epochId: string;
   checkpointId: string;
   signals: OrchestratorRotationSignals;
+  durableCurrentPath: string;
+  durableCurrentContent: Uint8Array;
 }
 
 interface BoundRuntimeRead {
@@ -87,20 +96,34 @@ export async function mutateOrchestratorRuntimeHealth(
       ? createAtomicWriteOperation(targetPath, content, { targetMustNotExist: true })
       : createAtomicWriteOperation(targetPath, content, { expectedContent: current.raw });
 
-  await commitAtomicWriteOperations([operation]);
+  const durableCurrentPrecondition = createAtomicContentPreconditionOperation(
+    binding.durableCurrentPath,
+    binding.durableCurrentContent,
+  );
+  await commitAtomicWriteOperations([operation, durableCurrentPrecondition]);
   return next;
 }
 
 async function requireActiveBinding(projectRoot: string): Promise<ActiveBinding> {
-  const checkpoint = await readCurrentOrchestratorCheckpoint(projectRoot);
-  if (checkpoint === null) {
-    fail("no current durable orchestrator checkpoint exists");
+  const durableCurrentPath = getCurrentOrchestratorCheckpointPath(projectRoot);
+  let durableCurrentContent: Buffer;
+  try {
+    durableCurrentContent = await readFile(durableCurrentPath);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      fail("no current durable orchestrator checkpoint exists");
+    }
+    throw error;
   }
+
+  const checkpoint = parseOrchestratorCheckpointJson(durableCurrentContent.toString("utf8"));
   assertActiveCheckpoint(checkpoint);
   return {
     epochId: checkpoint.epoch.epoch_id,
     checkpointId: checkpoint.checkpoint_id,
     signals: validateOrchestratorRotationSignals(checkpoint.status.signals),
+    durableCurrentPath,
+    durableCurrentContent,
   };
 }
 
