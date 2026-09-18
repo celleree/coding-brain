@@ -189,9 +189,9 @@ describe("orchestrator C1 runtime health", () => {
     await writeFile(getOrchestratorRuntimeHealthPath(projectRoot), JSON.stringify(malformed), "utf8");
 
     await expect(readOrchestratorRuntimeHealth(projectRoot)).rejects.toThrow(/meaningful_cycle_count/);
-    await expect(
-      mutateOrchestratorRuntimeHealth(projectRoot, { type: "FORCED_ROTATION" }),
-    ).rejects.toThrow(/meaningful_cycle_count/);
+    await expect(mutateOrchestratorRuntimeHealth(projectRoot, { type: "FORCED_ROTATION" })).rejects.toThrow(
+      /meaningful_cycle_count/,
+    );
   });
 
   it("only explicit valid meaningful-cycle mutations increment the cycle counter", async () => {
@@ -230,7 +230,10 @@ describe("orchestrator C1 runtime health", () => {
     const before = (await readOrchestratorRuntimeHealth(projectRoot)).signals;
 
     const health = await mutateOrchestratorRuntimeHealth(projectRoot, { type: "STALE_STATE_CORRECTION" });
-    expect(health.signals).toEqual({ ...before, stale_state_correction_count: before.stale_state_correction_count + 1 });
+    expect(health.signals).toEqual({
+      ...before,
+      stale_state_correction_count: before.stale_state_correction_count + 1,
+    });
   });
 
   it("round-trips architecture, phase, optional host pressure, and forced-rotation signals", async () => {

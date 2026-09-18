@@ -187,15 +187,22 @@ function validateRuntimeMutation(value: unknown): OrchestratorRuntimeHealthMutat
     assertKnownKeys(mutation, ["type", "cycle_kind"]);
     return { type, cycle_kind: requireCycleKind(mutation.cycle_kind) };
   }
-  if (type === "STALE_STATE_CORRECTION" || type === "ARCHITECTURE_OR_DEPENDENCY_CHANGE" ||
-      type === "HOST_CONTEXT_PRESSURE_CLEAR" || type === "FORCED_ROTATION") {
+  if (
+    type === "STALE_STATE_CORRECTION" ||
+    type === "ARCHITECTURE_OR_DEPENDENCY_CHANGE" ||
+    type === "HOST_CONTEXT_PRESSURE_CLEAR" ||
+    type === "FORCED_ROTATION"
+  ) {
     assertKnownKeys(mutation, ["type"]);
     return { type };
   }
   if (type === "PHASE_BOUNDARY_SIGNAL") {
     assertKnownKeys(mutation, ["type", "phase_boundary"]);
     const phase = mutation.phase_boundary;
-    if (typeof phase !== "string" || !ORCHESTRATOR_PHASE_BOUNDARY_SIGNALS.includes(phase as OrchestratorPhaseBoundarySignal)) {
+    if (
+      typeof phase !== "string" ||
+      !ORCHESTRATOR_PHASE_BOUNDARY_SIGNALS.includes(phase as OrchestratorPhaseBoundarySignal)
+    ) {
       fail("mutation.phase_boundary must use an existing orchestrator phase-boundary signal");
     }
     return { type, phase_boundary: phase as OrchestratorPhaseBoundarySignal };
@@ -254,7 +261,10 @@ function applyMutation(
 }
 
 function requireCycleKind(value: unknown): OrchestratorMeaningfulCycleKind {
-  if (typeof value !== "string" || !ORCHESTRATOR_MEANINGFUL_CYCLE_KINDS.includes(value as OrchestratorMeaningfulCycleKind)) {
+  if (
+    typeof value !== "string" ||
+    !ORCHESTRATOR_MEANINGFUL_CYCLE_KINDS.includes(value as OrchestratorMeaningfulCycleKind)
+  ) {
     fail("mutation.cycle_kind must identify a meaningful orchestration operation");
   }
   return value as OrchestratorMeaningfulCycleKind;
