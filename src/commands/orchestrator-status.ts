@@ -13,7 +13,7 @@ export function register(program: Command): void {
     .command("orchestrator-status")
     .description("Show read-only health and rotation status for the active orchestrator epoch.")
     .option("--json", 'Print the result as JSON. Equivalent to "--format json".')
-    .option("--format <format>", 'Output format: "markdown" or "json".', "markdown")
+    .option("--format <format>", 'Output format: "markdown" or "json".')
     .action(async (options: { json?: boolean; format?: string }) => {
       const projectRoot = await helpers.resolveProjectRoot();
       const status = await buildOrchestratorStatus(projectRoot);
