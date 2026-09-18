@@ -1,0 +1,25 @@
+name: C2 Focused Verification
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  focused:
+    if: github.head_ref == 'feature/orch-c2-status'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Focused C2 C1 A2 tests
+        run: npx vitest run test/orchestrator-status.test.mjs test/orchestrator-runtime-health.test.mjs test/orchestrator-rotation.test.mjs
