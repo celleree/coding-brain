@@ -190,6 +190,14 @@ describe("orchestrator C1 runtime health", () => {
     const rebased = await readOrchestratorRuntimeHealth(projectRoot);
     expect(rebased.base_checkpoint_id).toBe("checkpoint-2");
     expect(rebased.signals).toEqual(durableSignals);
+
+    const retried = await mutateOrchestratorRuntimeHealth(projectRoot, { type: "FORCED_ROTATION" });
+    expect(retried.base_checkpoint_id).toBe("checkpoint-2");
+    expect(retried.signals.forced_rotation).toBe(true);
+
+    const persisted = JSON.parse(await readFile(runtimePath, "utf8"));
+    expect(persisted.base_checkpoint_id).toBe("checkpoint-2");
+    expect(persisted.signals.forced_rotation).toBe(true);
   });
 
   it("does not leak predecessor runtime signals into a successor epoch", async () => {
