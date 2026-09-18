@@ -8,10 +8,7 @@ import type {
 } from "./orchestrator-lifecycle.js";
 import { readCurrentOrchestratorCheckpoint } from "./orchestrator-checkpoint-api.js";
 import { readOrchestratorRuntimeHealth } from "./orchestrator-runtime-health.js";
-import {
-  evaluateOrchestratorRotation,
-  type OrchestratorRotationReason,
-} from "./orchestrator-rotation.js";
+import { evaluateOrchestratorRotation, type OrchestratorRotationReason } from "./orchestrator-rotation.js";
 
 export interface OrchestratorStatusView {
   epoch_id: string;
@@ -91,7 +88,9 @@ export function renderOrchestratorStatus(status: Readonly<OrchestratorStatusView
   );
 
   if (status.signals.host_context_pressure !== undefined) {
-    lines.push(`HOST CONTEXT PRESSURE: ${renderHostContextPressure(status.signals.host_context_pressure)}`);
+    lines.push(
+      `HOST CONTEXT PRESSURE: ${renderHostContextPressure(status.signals.host_context_pressure)}`,
+    );
   }
 
   lines.push(`FORCED ROTATION: ${status.signals.forced_rotation ? "yes" : "no"}`);
