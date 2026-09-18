@@ -291,9 +291,7 @@ describe("orchestrator C1 runtime health", () => {
 
     expect(fulfilled).toBeGreaterThanOrEqual(1);
     expect(finalHealth.signals.meaningful_cycle_count).toBe(4 + fulfilled);
-    if (fulfilled === 1) {
-      expect(results.some((result) => result.status === "rejected" && /precondition|missing/.test(String(result.reason)))).toBe(true);
-    }
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(2 - fulfilled);
   });
 
   it("feeds stored signals directly into the existing A2 evaluator without persisting a rotation result", async () => {
