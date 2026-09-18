@@ -21,6 +21,7 @@ import { register as registerSearch } from "./commands/search.js";
 import { register as registerShare } from "./commands/share.js";
 import { register as registerMcp } from "./commands/mcp.js";
 import { register as registerTui } from "./commands/tui.js";
+import { register as registerOrchestratorStatus } from "./commands/orchestrator-status.js";
 
 const program = new Command();
 
@@ -46,6 +47,7 @@ registerSearch(program);
 registerShare(program);
 registerMcp(program);
 registerTui(program);
+registerOrchestratorStatus(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   const debugEnabled = program.opts<{ debug?: boolean }>().debug || process.env.REPOBRAIN_DEBUG === "1";
