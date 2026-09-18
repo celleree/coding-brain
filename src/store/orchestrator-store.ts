@@ -244,13 +244,13 @@ function validateStatus(value: unknown): OrchestratorStatus {
     contract_version: ORCHESTRATOR_LIFECYCLE_CONTRACT_VERSION,
     epoch_id: requireNonEmptyString(status.epoch_id, "checkpoint.status.epoch_id"),
     controller: validateController(status.controller, "checkpoint.status.controller"),
-    signals: validateSignals(status.signals),
+    signals: validateOrchestratorRotationSignals(status.signals),
     rotation_state: rotationState,
     evaluated_at: requireTimestamp(status.evaluated_at, "checkpoint.status.evaluated_at"),
   };
 }
 
-function validateSignals(value: unknown): OrchestratorRotationSignals {
+export function validateOrchestratorRotationSignals(value: unknown): OrchestratorRotationSignals {
   const signals = requireObject(value, "checkpoint.status.signals");
   assertKnownKeys(
     signals,
