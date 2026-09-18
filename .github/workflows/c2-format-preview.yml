@@ -1,0 +1,16 @@
+name: C2 Format Preview
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  preview:
+    if: github.head_ref == 'feature/orch-c2-status'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prettier src/orchestrator-status.ts
