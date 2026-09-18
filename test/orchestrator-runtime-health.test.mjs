@@ -3,19 +3,24 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const fsReadHooks = vi.hoisted(() => ({ afterReadFile: null }));
+const fsReadHooks = vi.hoisted(() => ({ targetPath: null, afterReadFile: null }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    readFile: async (...args) => {
-      const result = await actual.readFile(...args);
+    readFile: (...args) => {
       const hook = fsReadHooks.afterReadFile;
-      if (hook !== null) {
-        await hook(args[0]);
+      if (hook === null || String(args[0]) !== fsReadHooks.targetPath) {
+        return actual.readFile(...args);
       }
-      return result;
+      return actual.readFile(...args).then(async (result) => {
+        const activeHook = fsReadHooks.afterReadFile;
+        if (activeHook !== null && String(args[0]) === fsReadHooks.targetPath) {
+          await activeHook();
+        }
+        return result;
+      });
     },
   };
 });
@@ -165,8 +170,9 @@ describe("orchestrator C1 runtime health", () => {
     const durableSignals = signals({ meaningful_cycle_count: 9, stale_state_correction_count: 1 });
     const updated = nextCheckpoint(initial, "checkpoint-2", durableSignals);
 
-    fsReadHooks.afterReadFile = async (targetPath) => {
-      if (String(targetPath) !== currentPath) return;
+    fsReadHooks.targetPath = currentPath;
+    fsReadHooks.afterReadFile = async () => {
+      fsReadHooks.targetPath = null;
       fsReadHooks.afterReadFile = null;
       await writeOrchestratorCheckpoint(projectRoot, updated, initial.checkpoint_id);
     };
@@ -176,6 +182,7 @@ describe("orchestrator C1 runtime health", () => {
         /Atomic write precondition failed because .*current\.json.*changed/,
       );
     } finally {
+      fsReadHooks.targetPath = null;
       fsReadHooks.afterReadFile = null;
     }
 
