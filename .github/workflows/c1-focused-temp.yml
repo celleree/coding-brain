@@ -1,0 +1,23 @@
+name: C1 Focused Verification
+
+on:
+  push:
+    branches:
+      - feature/orch-c1-runtime-health
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run test/orchestrator-runtime-health.test.mjs test/orchestrator-lifecycle.test.mjs test/orchestrator-rotation.test.mjs test/orchestrator-store.test.mjs test/orchestrator-checkpoint-api.test.mjs test/orchestrator-checkpoint-repair.test.mjs
