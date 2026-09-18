@@ -3,19 +3,23 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const checkpointReadHooks = vi.hoisted(() => ({ callCount: 0, afterCall: null }));
+const fsReadHooks = vi.hoisted(() => ({ targetPath: null, afterReadFile: null }));
 
-vi.mock("../dist/orchestrator-checkpoint-api.js", async (importOriginal) => {
+vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    readCurrentOrchestratorCheckpoint: async (...args) => {
-      const result = await actual.readCurrentOrchestratorCheckpoint(...args);
-      checkpointReadHooks.callCount += 1;
-      if (checkpointReadHooks.afterCall !== null) {
-        await checkpointReadHooks.afterCall(checkpointReadHooks.callCount);
+    readFile: (...args) => {
+      if (fsReadHooks.afterReadFile === null || String(args[0]) !== fsReadHooks.targetPath) {
+        return actual.readFile(...args);
       }
-      return result;
+      return actual.readFile(...args).then(async (result) => {
+        const hook = fsReadHooks.afterReadFile;
+        fsReadHooks.afterReadFile = null;
+        fsReadHooks.targetPath = null;
+        if (hook !== null) await hook();
+        return result;
+      });
     },
   };
 });
@@ -167,7 +171,7 @@ describe("orchestrator C2 status", () => {
 
   it("keeps absent host context and phase absent instead of guessing", async () => {
     const projectRoot = await tempRoot();
-    await startActive(projectRoot, { phaseAtStart: undefined });
+    await startActive(projectRoot, { phaseAtStart: null });
 
     const status = await buildOrchestratorStatus(projectRoot);
     expect(status.phase_at_start).toBeUndefined();
@@ -201,19 +205,16 @@ describe("orchestrator C2 status", () => {
     const initial = await startActive(projectRoot);
     const updated = nextCheckpoint(initial, "checkpoint-2", signals({ meaningful_cycle_count: 9 }));
 
-    checkpointReadHooks.callCount = 0;
-    checkpointReadHooks.afterCall = async (callCount) => {
-      if (callCount === 1) {
-        checkpointReadHooks.afterCall = null;
-        await writeOrchestratorCheckpoint(projectRoot, updated, initial.checkpoint_id);
-      }
+    fsReadHooks.targetPath = path.join(projectRoot, ".brain", "orchestration", "current.json");
+    fsReadHooks.afterReadFile = async () => {
+      await writeOrchestratorCheckpoint(projectRoot, updated, initial.checkpoint_id);
     };
 
     try {
       await expect(buildOrchestratorStatus(projectRoot)).rejects.toThrow(/snapshot changed.*retry/);
     } finally {
-      checkpointReadHooks.callCount = 0;
-      checkpointReadHooks.afterCall = null;
+      fsReadHooks.targetPath = null;
+      fsReadHooks.afterReadFile = null;
     }
   });
 
