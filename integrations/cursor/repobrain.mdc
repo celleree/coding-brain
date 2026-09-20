@@ -26,7 +26,7 @@ alwaysApply: true
 brain start --format json --task "<当前任务描述>"
 ```
 
-将 `context_markdown` 作为本仓库背景上下文，`skill_plan` 作为路由参考。如果 `.brain/` 不存在，跳过并提示用户运行 `brain setup`。
+将 `context_markdown` 作为本仓库背景上下文，`skill_plan` 作为路由参考；如果返回 `navigation_plan`，必须读取 canonical source paths、live checks 和 next steps。如果 `.brain/` 不存在，跳过并提示用户运行 `brain setup`。
 
 无法使用 `brain start` 时，回退到：
 
@@ -50,7 +50,7 @@ brain conversation-start --format json --task "<当前任务描述>" --path <已
 brain suggest-skills --format json --task "<当前任务描述>"
 ```
 
-消费 `invocation_plan` 做路由，不要在 Cursor 内创建独立的知识副本（如 .cursor/memories/ 等）。
+消费 `invocation_plan` 做路由；消费任何返回的 `navigation_plan` 来发现 canonical sources、live checks 和 next steps。不要在 Cursor 内创建独立的知识副本（如 .cursor/memories/ 等）。
 
 ## 阶段完成时运行本地检测
 
