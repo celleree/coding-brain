@@ -96,7 +96,6 @@ it("is backward compatible when no navigation manifest exists", async () => {
   }
 });
 
-
 it("matches the intended user-facing phrases despite inserted words and simple inflection", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
 
@@ -216,7 +215,6 @@ it("tracks optional canonical sources separately when they are not shared on the
   }
 });
 
-
 it("withholds the navigation plan when a selected route omits required safeguards", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
 
@@ -290,16 +288,12 @@ it("uses route priority to keep operational intent ahead of incidental feature w
     );
     expect(review.plan?.route_id).toBe("exact_head_review");
 
-    const failure = await buildAgentNavigationPlan(
-      projectRoot,
-      "Fix the failing build on this feature branch.",
-    );
+    const failure = await buildAgentNavigationPlan(projectRoot, "Fix the failing build on this feature branch.");
     expect(failure.plan?.route_id).toBe("ci_failure");
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
-
 
 it("keeps explicit implementation operations ahead of later memory-review subject words", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
@@ -344,7 +338,6 @@ it("keeps explicit implementation operations ahead of later memory-review subjec
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
-
 
 it("withholds the plan when a selected required source definition is invalid", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
