@@ -68,13 +68,21 @@ These routing fields are selected by ChatGPT/the human before launching or conti
 
 ## 4. Load repo context before a new Codex session
 
-The simplest option is still:
+Prefer the full task-aware bootstrap:
 
 ```bash
-brain inject
+brain start --format json --task "<current task>"
 ```
 
-Paste or reference the output in your session so Codex starts with the latest repo decisions, gotchas, and conventions.
+Use `context_markdown` for repo knowledge, `skill_plan` for RepoBrain routing, and consume `navigation_plan` whenever present to load canonical sources, perform live checks, and follow route-specific next steps.
+
+If a fresh conversation opens later in the same session, use:
+
+```bash
+brain conversation-start --format json --task "<current task>" --path <changed-path>
+```
+
+Use `brain inject` only when you explicitly need the lightweight durable-context path.
 
 If you wire in the session-start hook, this step can be automatic.
 
@@ -99,7 +107,7 @@ The installed `post-commit` hook stays lightweight:
 
 The safest default is:
 
-- session-start injects context automatically
+- session-start loads task-aware context and navigation automatically
 - session-end extracts reviewable `candidate` memories
 - you approve the good ones explicitly
 
