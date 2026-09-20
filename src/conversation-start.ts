@@ -132,6 +132,7 @@ export async function buildConversationStart(
       context_markdown: bundle.context_markdown,
       skill_plan: bundle.skill_plan,
       task_routing_bundle: bundle,
+      ...(bundle.navigation_plan ? { navigation_plan: bundle.navigation_plan } : {}),
     };
   }
 
