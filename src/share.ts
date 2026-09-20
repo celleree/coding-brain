@@ -1,17 +1,30 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { Memory, StoredMemoryRecord } from "./types.js";
+import { sourceBlobRelativePath } from "./store/source-store.js";
+import type { StoredMemoryRecord } from "./types.js";
 import { getMemoryStatus, loadStoredMemoryRecords } from "./store.js";
+
+export const SHARED_MEMORY_INDEX_PATH = path.join(".brain", "shared", "index.md");
 
 export interface SharePlan {
   records: StoredMemoryRecord[];
+  sourcePaths: string[];
+  sharedIndexPath: string;
+  sharedIndexContent: string;
+  includeSourceEvidence: boolean;
+  warnings: string[];
   commitMessage: string;
   addCommands: string[];
 }
 
 export async function buildSharePlan(
   projectRoot: string,
-  options: { allActive?: boolean; memoryId?: string },
+  options: {
+    allActive?: boolean;
+    memoryId?: string;
+    includeSourceEvidence?: boolean;
+  },
 ): Promise<SharePlan> {
   const records = await loadStoredMemoryRecords(projectRoot);
   const activeRecords = records.filter((entry) => getMemoryStatus(entry.memory) === "active");
@@ -21,7 +34,7 @@ export async function buildSharePlan(
       throw new Error("No active memories found.");
     }
 
-    return createSharePlan(projectRoot, activeRecords);
+    return createSharePlan(activeRecords, Boolean(options.includeSourceEvidence));
   }
 
   const memoryId = options.memoryId?.trim();
@@ -39,18 +52,89 @@ export async function buildSharePlan(
     throw new Error([`Multiple memories matched "${memoryId}". Use a more specific id:`, ...suggestions].join("\n"));
   }
 
-  return createSharePlan(projectRoot, matches);
+  return createSharePlan(matches, Boolean(options.includeSourceEvidence));
 }
 
-function createSharePlan(projectRoot: string, records: StoredMemoryRecord[]): SharePlan {
+export async function writeShareIndex(projectRoot: string, plan: SharePlan): Promise<void> {
+  const indexPath = path.join(projectRoot, plan.sharedIndexPath);
+  await mkdir(path.dirname(indexPath), { recursive: true });
+  await writeFile(indexPath, plan.sharedIndexContent, "utf8");
+}
+
+function createSharePlan(records: StoredMemoryRecord[], includeSourceEvidence: boolean): SharePlan {
   const sortedRecords = [...records].sort((left, right) => right.memory.date.localeCompare(left.memory.date));
-  const addCommands = sortedRecords.map((entry) => `git add ${quoteForShell(entry.relativePath)}`);
+  const sourcePaths = includeSourceEvidence
+    ? dedupe(
+        sortedRecords.map((entry) => {
+          if (!entry.memory.source_episode) {
+            throw new Error(`Memory "${entry.memory.title}" has no source_episode and cannot be shared portably.`);
+          }
+          return sourceBlobRelativePath(entry.memory.source_episode);
+        }),
+      )
+    : [];
+
+  const recordPaths = sortedRecords.map((entry) => normalizePath(entry.relativePath));
+  const addPaths = dedupe([...recordPaths, normalizePath(SHARED_MEMORY_INDEX_PATH), ...sourcePaths.map(normalizePath)]);
+  const warnings = includeSourceEvidence
+    ? [
+        "Raw provenance source evidence is included. Review the selected source blob contents before committing.",
+      ]
+    : [
+        "Raw provenance source evidence is excluded by default. Repository-reading agents can use the shared index and records, but shell-based provenance verification on another checkout requires rerunning share with --include-source-evidence after reviewing the raw source material.",
+      ];
 
   return {
     records: sortedRecords,
-    addCommands,
+    sourcePaths,
+    sharedIndexPath: normalizePath(SHARED_MEMORY_INDEX_PATH),
+    sharedIndexContent: renderSharedMemoryIndex(sortedRecords, includeSourceEvidence),
+    includeSourceEvidence,
+    warnings,
     commitMessage: buildCommitMessage(sortedRecords),
+    addCommands: addPaths.map((entry) => `git add -f ${quoteForShell(entry)}`),
   };
+}
+
+function renderSharedMemoryIndex(records: StoredMemoryRecord[], includeSourceEvidence: boolean): string {
+  const lines = [
+    "# RepoBrain Shared Memory Index",
+    "",
+    "This index contains only memories explicitly selected by `brain share`.",
+    "It is not the local RepoBrain runtime index and does not expose unselected candidates, working state, or logs.",
+    "",
+    `Source evidence included: ${includeSourceEvidence ? "yes" : "no"}`,
+    "",
+    "## Shared memories",
+    "",
+  ];
+
+  for (const entry of records) {
+    const recordPath = normalizePath(entry.relativePath);
+    const link = relativeLinkFromSharedIndex(recordPath);
+    lines.push(
+      `- [${entry.memory.title}](${link}) | ${entry.memory.type} | ${entry.memory.importance} | ${entry.memory.date}`,
+    );
+    lines.push(`  - ${entry.memory.summary}`);
+    if (entry.memory.tags.length > 0) {
+      lines.push(`  - tags: ${entry.memory.tags.join(", ")}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(
+    includeSourceEvidence
+      ? "The selected provenance source blobs are included in the share plan for full RepoBrain verification on another checkout."
+      : "Raw provenance source blobs are intentionally not included. Use `brain share --include-source-evidence` only after reviewing the raw source material.",
+  );
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+function relativeLinkFromSharedIndex(recordPath: string): string {
+  const relativeToBrain = recordPath.replace(/^\.brain\//u, "");
+  return `../${relativeToBrain}`;
 }
 
 function matchStoredMemories(records: StoredMemoryRecord[], rawQuery: string): StoredMemoryRecord[] {
@@ -101,6 +185,14 @@ function getCandidateId(entry: StoredMemoryRecord): string {
   return path.basename(entry.filePath, path.extname(entry.filePath));
 }
 
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
+
+function dedupe(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
 function quoteForShell(value: string): string {
-  return JSON.stringify(value.replace(/\\/g, "/"));
+  return JSON.stringify(normalizePath(value));
 }
