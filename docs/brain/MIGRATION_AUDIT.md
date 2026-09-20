@@ -13,6 +13,16 @@ Existing project knowledge was not moved, renamed, rewritten, or deleted. The na
 - `docs/brain/ROUTES.yaml`
 - `docs/brain/MIGRATION_AUDIT.md`
 
+## Runtime integration
+
+The navigation layer is also consumed automatically by existing task routing:
+
+- `src/agent-navigation.ts` loads and validates `docs/brain/ROUTES.yaml` when present.
+- `src/task-routing.ts` adds the selected route as `navigation_plan` in the normal task-routing bundle.
+- Because `brain start` and `brain conversation-start` already consume task routing, shell-capable agents receive navigation without requiring the user to remember this file system.
+- `src/index.ts` and `src/store-api.ts` expose the navigation planner programmatically.
+- If a project does not have `docs/brain/ROUTES.yaml`, existing RepoBrain routing remains compatible.
+
 ## Existing information brought into the new navigation layer by reference
 
 The route map links to these existing authorities rather than copying their contents:
