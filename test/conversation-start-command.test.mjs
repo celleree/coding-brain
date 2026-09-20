@@ -22,6 +22,7 @@ await runTest("conversation-start bootstraps with start on the first task-aware 
     assert.equal(parsed.refresh_mode, "smart");
     assert.ok(typeof parsed.context_markdown === "string" && parsed.context_markdown.length > 0);
     assert.ok(parsed.skill_plan);
+    assert.equal(parsed.task_routing_bundle.navigation_plan.route_id, "continue_project");
     assert.equal(parsed.decision_trace.first_conversation, true);
   });
 });
@@ -67,6 +68,7 @@ await runTest(
       assert.equal(parsed.action, "inject");
       assert.equal(parsed.decision_trace.task_changed, true);
       assert.ok(typeof parsed.context_markdown === "string" && parsed.context_markdown.length > 0);
+      assert.equal(parsed.navigation_plan.route_id, "continue_project");
     });
   },
 );
@@ -113,6 +115,21 @@ async function withTempRepo(callback) {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-conversation-start-"));
   try {
     await initBrain(projectRoot);
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Temp repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  continue_project:",
+        "    match: [continue]",
+        "    load: [readme]",
+      ].join("\n"),
+      "utf8",
+    );
     await callback(projectRoot);
   } finally {
     await rm(projectRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
