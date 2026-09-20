@@ -15,7 +15,7 @@ Resolution: try `brain --version` first; on failure try `npx brain --version`; i
 ## Session Start
 
 - Prefer `brain start --format json --task "<current task>"` in the first conversation of a session.
-- Read `context_markdown` as compact repo context; use `skill_plan` as routing reference.
+- Read `context_markdown` as compact repo context; use `skill_plan` as routing reference; consume `navigation_plan` whenever present to load canonical sources, perform live checks, and follow next steps.
 - Treat the payload as Core-owned context, not as Copilot-owned memory.
 - If a fresh conversation opens later in the same session, run `brain conversation-start --format json --task "<current task>" --path <changed-path>` and follow the returned `action`.
 - If `brain start` is unavailable, fall back to `brain inject --task "<current task>" --path <changed-path>`.
