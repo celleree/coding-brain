@@ -33,7 +33,7 @@ ${DEV_FALLBACK_SECTION}
 brain start --format json --task "<当前任务描述>"
 \`\`\`
 
-将 \`context_markdown\` 作为本仓库背景上下文，\`skill_plan\` 作为路由参考。如果 \`.brain/\` 不存在，跳过并提示用户运行 \`brain setup\`。
+将 \`context_markdown\` 作为本仓库背景上下文，\`skill_plan\` 作为路由参考；如果返回 \`navigation_plan\`，必须读取其中的 canonical source paths、live checks 和 next steps 并执行相关发现流程。如果 \`.brain/\` 不存在，跳过并提示用户运行 \`brain setup\`。
 
 无法使用 \`brain start\` 时，回退到：
 
@@ -57,7 +57,7 @@ brain conversation-start --format json --task "<当前任务描述>" --path <已
 brain suggest-skills --format json --task "<当前任务描述>"
 \`\`\`
 
-消费 \`invocation_plan\` 做路由，不要将其复制到独立的记忆系统。
+消费 \`invocation_plan\` 做路由；消费任何返回的 \`navigation_plan\` 来发现 canonical sources、live checks 和 next steps。不要将其复制到独立的记忆系统。
 
 ## 阶段完成时运行本地检测
 
@@ -162,7 +162,7 @@ ${DEV_FALLBACK_SECTION}
 brain start --format json --task "<当前任务描述>"
 \`\`\`
 
-将 \`context_markdown\` 作为本仓库背景上下文，\`skill_plan\` 作为 RepoBrain 路由参考（不替代 Codex 原生行动选择）。如果 \`.brain/\` 不存在，跳过并提示用户运行 \`brain setup\`。
+将 \`context_markdown\` 作为本仓库背景上下文，\`skill_plan\` 作为 RepoBrain 路由参考（不替代 Codex 原生行动选择）；如果返回 \`navigation_plan\`，必须读取其中的 canonical source paths、live checks 和 next steps 并执行相关发现流程。如果 \`.brain/\` 不存在，跳过并提示用户运行 \`brain setup\`。
 
 无法使用 \`brain start\` 时，回退到：
 
@@ -186,7 +186,7 @@ brain conversation-start --format json --task "<当前任务描述>" --path <已
 brain suggest-skills --format json --task "<当前任务描述>"
 \`\`\`
 
-消费 \`invocation_plan\` 做路由，不要将其转换成 Codex 专有记忆。
+消费 \`invocation_plan\` 做路由；消费任何返回的 \`navigation_plan\` 来发现 canonical sources、live checks 和 next steps。不要将其转换成 Codex 专有记忆。
 
 ## 阶段完成时运行本地检测
 
