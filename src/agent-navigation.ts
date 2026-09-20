@@ -50,10 +50,7 @@ interface RouteCandidate {
   score: number;
 }
 
-export async function buildAgentNavigationPlan(
-  projectRoot: string,
-  task: string,
-): Promise<AgentNavigationResult> {
+export async function buildAgentNavigationPlan(projectRoot: string, task: string): Promise<AgentNavigationResult> {
   const manifestFile = path.join(projectRoot, AGENT_NAVIGATION_MANIFEST_PATH);
   let raw: string;
 
@@ -100,15 +97,11 @@ export async function buildAgentNavigationPlan(
   warnings.push(...selectedRouteIssues);
 
   if (selected.matchKind === "fallback") {
-    warnings.push(
-      `No navigation route matched task intent; using "${selected.routeId}" as the fallback route.`,
-    );
+    warnings.push(`No navigation route matched task intent; using "${selected.routeId}" as the fallback route.`);
   }
 
   if (selectedRouteIssues.length > 0) {
-    warnings.push(
-      `Selected navigation route "${selected.routeId}" is invalid; navigation plan withheld.`,
-    );
+    warnings.push(`Selected navigation route "${selected.routeId}" is invalid; navigation plan withheld.`);
     return { warnings };
   }
 
@@ -122,9 +115,7 @@ export async function buildAgentNavigationPlan(
   for (const sourceId of loadIds) {
     const source = (manifest.sources as Record<string, unknown>)[sourceId];
     if (!isRecord(source) || typeof (source as NavigationSource).path !== "string") {
-      warnings.push(
-        `Agent navigation route "${selected.routeId}" references invalid source "${sourceId}".`,
-      );
+      warnings.push(`Agent navigation route "${selected.routeId}" references invalid source "${sourceId}".`);
       selectedSourceInvalid = true;
       continue;
     }
@@ -138,9 +129,7 @@ export async function buildAgentNavigationPlan(
 
     const optionalValue = (source as NavigationSource).optional;
     if (optionalValue !== undefined && typeof optionalValue !== "boolean") {
-      warnings.push(
-        `Agent navigation source "${sourceId}" optional must be a boolean when present.`,
-      );
+      warnings.push(`Agent navigation source "${sourceId}" optional must be a boolean when present.`);
       selectedSourceInvalid = true;
       continue;
     }
@@ -153,9 +142,7 @@ export async function buildAgentNavigationPlan(
       if (optional) {
         unavailableOptionalSources.push(sourcePath);
       } else {
-        warnings.push(
-          `Agent navigation source "${sourceId}" is missing at "${sourcePath}".`,
-        );
+        warnings.push(`Agent navigation source "${sourceId}" is missing at "${sourcePath}".`);
         selectedSourceInvalid = true;
       }
     }
@@ -196,9 +183,7 @@ export function renderAgentNavigationPlan(plan: AgentNavigationPlan): string {
   ];
 
   if (plan.unavailable_optional_sources.length > 0) {
-    lines.push(
-      `- unavailable optional sources: ${plan.unavailable_optional_sources.join(", ")}`,
-    );
+    lines.push(`- unavailable optional sources: ${plan.unavailable_optional_sources.join(", ")}`);
   }
 
   return lines.join("\n");
@@ -229,14 +214,8 @@ function selectRoute(
       (earliest, match) => Math.min(earliest, match.start),
       Number.POSITIVE_INFINITY,
     );
-    const specificity = phraseMatches.reduce(
-      (highest, match) => Math.max(highest, match.tokenCount),
-      0,
-    );
-    const score = matchedTerms.reduce(
-      (highest, term) => Math.max(highest, scoreMatchedPhrase(term)),
-      0,
-    );
+    const specificity = phraseMatches.reduce((highest, match) => Math.max(highest, match.tokenCount), 0);
+    const score = matchedTerms.reduce((highest, term) => Math.max(highest, scoreMatchedPhrase(term)), 0);
 
     candidates.push({
       routeId,
@@ -336,12 +315,7 @@ function normalizeIntentToken(token: string): string {
   return aliases[token] ?? token;
 }
 
-function readStringList(
-  value: unknown,
-  label: string,
-  warnings: string[],
-  required = false,
-): string[] {
+function readStringList(value: unknown, label: string, warnings: string[], required = false): string[] {
   if (value === undefined) {
     if (required) {
       warnings.push(`Agent navigation ${label} must be a non-empty string array.`);
@@ -354,9 +328,7 @@ function readStringList(
     return [];
   }
 
-  const invalid = value.some(
-    (entry) => typeof entry !== "string" || entry.trim().length === 0,
-  );
+  const invalid = value.some((entry) => typeof entry !== "string" || entry.trim().length === 0);
   if (invalid) {
     warnings.push(`Agent navigation ${label} contains a non-string or empty entry.`);
   }
@@ -376,13 +348,8 @@ function readStringList(
 function validateSelectedRoute(route: NavigationRoute, routeId: string): string[] {
   const issues: string[] = [];
 
-  if (
-    route.priority !== undefined &&
-    (typeof route.priority !== "number" || !Number.isFinite(route.priority))
-  ) {
-    issues.push(
-      `Agent navigation route "${routeId}" priority must be a finite number when present.`,
-    );
+  if (route.priority !== undefined && (typeof route.priority !== "number" || !Number.isFinite(route.priority))) {
+    issues.push(`Agent navigation route "${routeId}" priority must be a finite number when present.`);
   }
 
   for (const [fieldName, value] of [
@@ -392,9 +359,7 @@ function validateSelectedRoute(route: NavigationRoute, routeId: string): string[
     ["then", route.then],
   ] as const) {
     if (!isNonEmptyStringArray(value)) {
-      issues.push(
-        `Agent navigation route "${routeId}" ${fieldName} must be a non-empty string array.`,
-      );
+      issues.push(`Agent navigation route "${routeId}" ${fieldName} must be a non-empty string array.`);
     }
   }
 
@@ -424,9 +389,7 @@ function readRoutePriority(value: unknown, routeId: string, warnings: string[]):
   }
 
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    warnings.push(
-      `Agent navigation route "${routeId}" priority must be a finite number when present.`,
-    );
+    warnings.push(`Agent navigation route "${routeId}" priority must be a finite number when present.`);
     return 0;
   }
 
@@ -439,9 +402,7 @@ function readOptionalBoolean(value: unknown, sourceId: string, warnings: string[
   }
 
   if (typeof value !== "boolean") {
-    warnings.push(
-      `Agent navigation source "${sourceId}" optional must be a boolean when present.`,
-    );
+    warnings.push(`Agent navigation source "${sourceId}" optional must be a boolean when present.`);
     return false;
   }
 
@@ -449,7 +410,11 @@ function readOptionalBoolean(value: unknown, sourceId: string, warnings: string[
 }
 
 function normalizeRepoPath(value: string): string {
-  return value.trim().replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/^\/+/, "");
+  return value
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .replace(/^\/+/, "");
 }
 
 function dedupe(values: string[]): string[] {
@@ -462,10 +427,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMissingFileError(error: unknown): boolean {
   return Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: unknown }).code === "ENOENT",
+    error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "ENOENT",
   );
 }
 
