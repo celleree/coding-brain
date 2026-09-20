@@ -85,6 +85,12 @@ export async function prepareSourceBlobReferenceCheck(
   }
 }
 
+export function sourceBlobRelativePath(reference: string): string {
+  const digest = parseDigestReference(reference);
+  if (!digest) throw new Error("Invalid source_episode reference.");
+  return path.join(".brain", "sources", "sha256", digest.slice(0, 2), `${digest}.blob`);
+}
+
 export async function verifySourceEpisode(
   projectRoot: string,
   reference: string | undefined,
