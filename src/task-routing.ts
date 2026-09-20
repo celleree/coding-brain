@@ -1,8 +1,4 @@
-import {
-  buildAgentNavigationPlan,
-  renderAgentNavigationPlan,
-  type AgentNavigationPlan,
-} from "./agent-navigation.js";
+import { buildAgentNavigationPlan, renderAgentNavigationPlan, type AgentNavigationPlan } from "./agent-navigation.js";
 import { buildInjection } from "./inject.js";
 import {
   buildSkillShortlist,
