@@ -25,6 +25,7 @@ const SHARED_CONTRACT_PHRASES = [
   "brain reinforce",
   "candidate",
   ".brain/",
+  "navigation_plan",
 ];
 
 const DEV_FALLBACK_PHRASES = ["npx brain", "node dist/cli.js", "brain --version"];
@@ -234,6 +235,7 @@ await runTest("integration template files align with generated steering rules on
     assert.ok(content.includes("candidate"), `${templatePath} is missing candidate-first wording`);
     assert.ok(content.includes("brain reinforce"), `${templatePath} is missing failure path`);
     assert.ok(content.includes(".brain/"), `${templatePath} is missing .brain/ reference`);
+    assert.ok(content.includes("navigation_plan"), `${templatePath} is missing navigation_plan consumption`);
     assert.ok(
       content.includes("fresh conversation") || content.includes("新 conversation"),
       `${templatePath} is missing same-session fresh conversation guidance`,
