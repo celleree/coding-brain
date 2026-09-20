@@ -81,6 +81,9 @@ it("routes realistic production intents to the operational route instead of inci
     ["Set up RepoBrain.", "setup_onboarding"],
     ["Review this memory.", "memory_review"],
     ["Approve this memory.", "memory_review"],
+    ["Add a feature to approve memory candidates automatically.", "implement_feature"],
+    ["Implement the memory review workflow change.", "implement_feature"],
+    ["Add a feature for memory review.", "implement_feature"],
   ];
 
   for (const [task, expectedRoute] of cases) {
