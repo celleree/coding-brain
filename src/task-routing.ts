@@ -1,3 +1,4 @@
+import { buildAgentNavigationPlan, type AgentNavigationPlan } from "./agent-navigation.js";
 import { buildInjection } from "./inject.js";
 import {
   buildSkillShortlist,
@@ -46,6 +47,8 @@ export interface TaskRoutingBundle {
   routing_explanation?: RoutingExplanation;
   /** Optional progressive retrieval hints for expanding matched memories. */
   expansion_plan?: TaskRoutingExpansionPlan;
+  /** Optional repository-navigation plan selected from docs/brain/ROUTES.yaml when present. */
+  navigation_plan?: AgentNavigationPlan;
 }
 
 export function shouldEscalateRoutingPlan(plan: InvocationPlan, conflicts: SkillConflict[]): boolean {
@@ -89,7 +92,7 @@ export async function buildTaskRoutingBundle(
   const path_source = options.path_source ?? (paths.length > 0 ? "explicit" : "none");
   const warnings = [...(options.warnings ?? [])];
 
-  const [context_markdown, shortlist] = await Promise.all([
+  const [context_markdown, shortlist, navigation] = await Promise.all([
     buildInjection(projectRoot, config, {
       task,
       paths,
@@ -104,8 +107,10 @@ export async function buildTaskRoutingBundle(
       modules: options.modules ?? [],
       ...(options.includeSessionProfile === false ? { includeSessionProfile: false } : {}),
     }),
+    buildAgentNavigationPlan(projectRoot, task),
   ]);
 
+  warnings.push(...navigation.warnings);
   warnings.push(...summarizeRoutingEscalation(shortlist.invocation_plan, shortlist.conflicts));
 
   const display_mode: TaskRoutingDisplayMode = shouldEscalateRoutingPlan(shortlist.invocation_plan, shortlist.conflicts)
@@ -127,6 +132,7 @@ export async function buildTaskRoutingBundle(
     display_mode,
     ...(shortlist.routing_explanation ? { routing_explanation: shortlist.routing_explanation } : {}),
     ...(expansionPlan ? { expansion_plan: expansionPlan } : {}),
+    ...(navigation.plan ? { navigation_plan: navigation.plan } : {}),
   };
 }
 
@@ -146,6 +152,22 @@ export function renderTaskRoutingBundle(bundle: TaskRoutingBundle): string {
     lines.push("");
     lines.push("Warnings:");
     bundle.warnings.forEach((warning) => lines.push(`- ${warning}`));
+  }
+
+  if (bundle.navigation_plan) {
+    lines.push("");
+    lines.push("## Repository Navigation");
+    lines.push(`- route: ${bundle.navigation_plan.route_id}`);
+    lines.push(`- manifest: ${bundle.navigation_plan.manifest_path}`);
+    lines.push(
+      `- sources: ${bundle.navigation_plan.source_paths.length > 0 ? bundle.navigation_plan.source_paths.join(", ") : "None."}`,
+    );
+    lines.push(
+      `- live checks: ${bundle.navigation_plan.live_checks.length > 0 ? bundle.navigation_plan.live_checks.join("; ") : "None."}`,
+    );
+    lines.push(
+      `- next steps: ${bundle.navigation_plan.next_steps.length > 0 ? bundle.navigation_plan.next_steps.join("; ") : "None."}`,
+    );
   }
 
   lines.push("");
