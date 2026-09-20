@@ -14,6 +14,7 @@ describe("programmatic API entry", () => {
     expect(typeof api.buildConversationStart).toBe("function");
     expect(typeof api.buildSkillShortlist).toBe("function");
     expect(typeof api.buildTaskRoutingBundle).toBe("function");
+    expect(typeof api.buildAgentNavigationPlan).toBe("function");
     expect(typeof api.extractMemories).toBe("function");
     expect(typeof api.reviewCandidateMemory).toBe("function");
     expect(typeof api.reviewCandidateMemories).toBe("function");
