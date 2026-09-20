@@ -22,6 +22,7 @@ await runTest("conversation-start bootstraps with start on the first task-aware 
     assert.equal(parsed.refresh_mode, "smart");
     assert.ok(typeof parsed.context_markdown === "string" && parsed.context_markdown.length > 0);
     assert.ok(parsed.skill_plan);
+    assert.equal(parsed.navigation_plan.route_id, "continue_project");
     assert.equal(parsed.task_routing_bundle.navigation_plan.route_id, "continue_project");
     assert.equal(parsed.decision_trace.first_conversation, true);
   });
