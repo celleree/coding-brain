@@ -67,6 +67,8 @@ it("falls back to continue_project for unknown intent", async () => {
         "  continue_project:",
         "    match: [continue]",
         "    load: [readme]",
+        "    live_checks: [current SHA]",
+        "    then: [inspect]",
       ].join("\n"),
       "utf8",
     );
@@ -184,7 +186,7 @@ it("tracks optional canonical sources separately when they are not shared on the
       [
         "sources:",
         "  memory_index:",
-        "    path: .brain/index.md",
+        "    path: .brain/shared/index.md",
         "    optional: true",
         "  readme:",
         "    path: README.md",
@@ -199,7 +201,90 @@ it("tracks optional canonical sources separately when they are not shared on the
     const result = await buildAgentNavigationPlan(projectRoot, "continue");
     expect(result.warnings).toEqual([]);
     expect(result.plan?.source_paths).toEqual(["README.md"]);
-    expect(result.plan?.unavailable_optional_sources).toEqual([".brain/index.md"]);
+    expect(result.plan?.unavailable_optional_sources).toEqual([".brain/shared/index.md"]);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+
+it("warns when a selected route omits live checks or next steps", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  exact_head_review:",
+        "    priority: 100",
+        "    match: [review PR]",
+        "    load: [readme]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await buildAgentNavigationPlan(projectRoot, "review PR #12");
+    const warnings = result.warnings.join("\n");
+    expect(result.plan?.route_id).toBe("exact_head_review");
+    expect(warnings).toMatch(/live_checks must be a non-empty string array/i);
+    expect(warnings).toMatch(/then must be a non-empty string array/i);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+it("uses route priority to keep operational intent ahead of incidental feature wording", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  implement_feature:",
+        "    priority: 40",
+        "    match: [add feature, build feature]",
+        "    load: [readme]",
+        "    live_checks: [base SHA]",
+        "    then: [implement]",
+        "  exact_head_review:",
+        "    priority: 100",
+        "    match: [review PR]",
+        "    load: [readme]",
+        "    live_checks: [exact head]",
+        "    then: [do not edit]",
+        "  ci_failure:",
+        "    priority: 90",
+        "    match: [build fail]",
+        "    load: [readme]",
+        "    live_checks: [failing run]",
+        "    then: [inspect logs]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const review = await buildAgentNavigationPlan(
+      projectRoot,
+      "Review PR #12: add feature for navigation. Do not edit.",
+    );
+    expect(review.plan?.route_id).toBe("exact_head_review");
+
+    const failure = await buildAgentNavigationPlan(
+      projectRoot,
+      "Fix the failing build on this feature branch.",
+    );
+    expect(failure.plan?.route_id).toBe("ci_failure");
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
