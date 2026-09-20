@@ -208,7 +208,7 @@ function selectRoute(
     const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings, true);
     const phraseMatches = matchTerms
       .map((term) => findPhraseMatch(term, taskTokens))
-      .filter((match): match is PhraseMatch => match !== null);
+      .filter((match): match is PhraseMatch => match !== null && !isNegatedMatch(taskTokens, match));
     const matchedTerms = phraseMatches.map((match) => match.term);
     const matchStart = phraseMatches.reduce(
       (earliest, match) => Math.min(earliest, match.start),
@@ -282,13 +282,34 @@ function findPhraseMatch(term: string, taskTokens: string[]): PhraseMatch | null
   };
 }
 
+function isNegatedMatch(taskTokens: string[], match: PhraseMatch): boolean {
+  const windowStart = Math.max(0, match.start - 3);
+  const preceding = taskTokens.slice(windowStart, match.start);
+
+  if (preceding.includes("not") || preceding.includes("never") || preceding.includes("without")) {
+    return true;
+  }
+
+  if (preceding.length >= 2) {
+    const pair = preceding.slice(-2).join(" ");
+    if (pair === "do not") return true;
+  }
+
+  return false;
+}
+
 function scoreMatchedPhrase(term: string): number {
   const tokens = normalizeIntentTokens(term);
   return tokens.length * 100 + term.trim().length;
 }
 
 function normalizeIntentTokens(value: string): string[] {
-  const rawTokens = value.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const normalizedValue = value
+    .toLowerCase()
+    .replace(/\bdon't\b/g, "do not")
+    .replace(/\bcan't\b/g, "can not")
+    .replace(/\bwon't\b/g, "will not");
+  const rawTokens = normalizedValue.match(/[a-z0-9]+/g) ?? [];
   return rawTokens.map(normalizeIntentToken).filter(Boolean);
 }
 
