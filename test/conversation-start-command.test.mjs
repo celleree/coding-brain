@@ -51,6 +51,28 @@ await runTest(
   "conversation-start refreshes compact context when the task changes later in the same session",
   async () => {
     await withTempRepo(async (projectRoot) => {
+      await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+      await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+      await writeFile(
+        path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+        [
+          "sources:",
+          "  readme: { path: README.md }",
+          "routes:",
+          "  exact_head_review:",
+          "    match: [review PR]",
+          "    load: [readme]",
+          "    live_checks: [exact HEAD]",
+          "    then: [do not edit]",
+          "  continue_project:",
+          "    match: [continue]",
+          "    load: [readme]",
+          "    live_checks: [current SHA]",
+          "    then: [inspect]",
+        ].join("\n"),
+        "utf8",
+      );
+
       const first = await runCliProcess(
         ["conversation-start", "--task", "fix refund bug", "--format", "json"],
         projectRoot,
@@ -58,7 +80,7 @@ await runTest(
       assert.equal(first.code, 0, first.stderr);
 
       const second = await runCliProcess(
-        ["conversation-start", "--task", "audit payment webhook", "--format", "json"],
+        ["conversation-start", "--task", "review PR #12", "--format", "json"],
         projectRoot,
       );
       assert.equal(second.code, 0, second.stderr);
@@ -67,6 +89,7 @@ await runTest(
       assert.equal(parsed.action, "inject");
       assert.equal(parsed.decision_trace.task_changed, true);
       assert.ok(typeof parsed.context_markdown === "string" && parsed.context_markdown.length > 0);
+      assert.equal(parsed.navigation_plan?.route_id, "exact_head_review");
     });
   },
 );
