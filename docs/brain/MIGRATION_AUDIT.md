@@ -12,29 +12,53 @@ Existing project knowledge was not moved, renamed, rewritten, or deleted. The na
 - `docs/brain/START_HERE.md`
 - `docs/brain/ROUTES.yaml`
 - `docs/brain/MIGRATION_AUDIT.md`
+- `.brain/.gitignore`
 
 ## Runtime integration
 
-The navigation layer is also consumed automatically by existing task routing:
+The navigation layer is consumed automatically by existing task routing:
 
 - `src/agent-navigation.ts` loads and validates `docs/brain/ROUTES.yaml` when present.
 - `src/task-routing.ts` adds the selected route as `navigation_plan` in the normal task-routing bundle.
-- Because `brain start` and `brain conversation-start` already consume task routing, shell-capable agents receive navigation without requiring the user to remember this file system.
+- `src/conversation-start.ts` preserves `navigation_plan` for task-changing `inject` refreshes as well as full `start` bundles.
+- generated steering rules and maintained agent adapter contracts instruct consumers to read `navigation_plan` whenever it is present.
 - `src/index.ts` and `src/store-api.ts` expose the navigation planner programmatically.
-- If a project does not have `docs/brain/ROUTES.yaml`, existing RepoBrain routing remains compatible.
+- if a project does not have `docs/brain/ROUTES.yaml`, existing RepoBrain routing remains compatible.
 
-## Existing information brought into the new navigation layer by reference
+## Durable-memory bridge for repository-reading agents
+
+The previous repository-level `.gitignore` ignored the entire `.brain/` tree even though RepoBrain architecture treats durable repo knowledge as Git-shareable.
+
+This change removes that blanket ignore and adds `.brain/.gitignore` that excludes only local/derived state:
+
+- `runtime/`
+- `activity.json`
+- `errors.log`
+- `memory-index.json`
+
+Reviewed durable memory files, preferences, orchestration state, configuration, source evidence, and the generated `.brain/index.md` can therefore be reviewed and shared through normal Git workflows.
+
+Repository-reading agents use `.brain/index.md` when present and load only relevant active memory records. If that index is absent, instructions require the agent to state that durable-memory context is unavailable rather than silently assuming no memory exists.
+
+Any workstation-local durable records created while the old blanket ignore was in effect are not deleted by this change and cannot be enumerated from GitHub alone. A shell-capable operator should run `brain share --all-active` after updating to prepare those active records for Git review.
+
+## Existing information brought into the navigation layer by reference
 
 The route map links to these existing authorities rather than copying their contents:
 
+- `README.md`
 - `docs/architecture.md`
 - `docs/schema.md`
 - `docs/temporal-semantics.md`
 - `docs/cli-reference.md`
 - `docs/api.md`
+- `docs/workflow-modes.md`
+- `docs/team-workflow.md`
 - `integrations/README.md`
 - `integrations/codex/SKILL.md`
 - `integrations/codex/README.md`
+- `.codex/INSTALL.md`
+- `.codex/session-start-prompt.md`
 - `.codex/global-AGENTS.md`
 - `package.json`
 - `src/index.ts`
@@ -52,9 +76,9 @@ The original files remain the source of truth.
 
 The following information was intentionally not copied into the new navigation files.
 
-### Durable `.brain/` records
+### Durable `.brain/` record bodies
 
-Not copied because RepoBrain already owns that knowledge lifecycle. Decisions, gotchas, conventions, patterns, goals, working context, preferences, provenance, indexes, orchestration checkpoints, and runtime overlays must continue through the existing RepoBrain APIs and storage rules.
+Not copied into `docs/brain/` because RepoBrain already owns that knowledge lifecycle. Repository-reading agents access shared durable records through the canonical `.brain/` tree itself.
 
 ### GitHub branch, PR, SHA, CI, review, and issue state
 
@@ -74,7 +98,7 @@ Files such as `README.zh-CN.md` and `docs/*.zh-CN.md` remain intact. The route m
 
 ### Non-Codex adapter detail
 
-Claude, Cursor, and Copilot adapter files remain intact under `integrations/`. They are not part of the default Codex route and should be loaded when the active agent/task requires them.
+Claude, Cursor, and Copilot adapter files remain intact under `integrations/`. They are loaded when the active agent/task requires them rather than being default Codex context.
 
 ### Tests
 
