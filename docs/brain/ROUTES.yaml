@@ -10,6 +10,13 @@ principles:
   - Expand context when evidence requires it, not by default.
 
 sources:
+  memory_index:
+    path: .brain/index.md
+    authority: generated-from-durable-memory
+    optional: true
+  readme:
+    path: README.md
+    authority: stable
   architecture:
     path: docs/architecture.md
     authority: stable
@@ -25,6 +32,12 @@ sources:
   api_reference:
     path: docs/api.md
     authority: stable
+  workflow_modes:
+    path: docs/workflow-modes.md
+    authority: stable
+  team_workflow:
+    path: docs/team-workflow.md
+    authority: stable
   integration_contract:
     path: integrations/README.md
     authority: stable
@@ -33,6 +46,12 @@ sources:
     authority: stable
   codex_adapter:
     path: integrations/codex/README.md
+    authority: stable
+  codex_install:
+    path: .codex/INSTALL.md
+    authority: stable
+  codex_session_start:
+    path: .codex/session-start-prompt.md
     authority: stable
   codex_personal_defaults:
     path: .codex/global-AGENTS.md
@@ -72,7 +91,9 @@ routes:
       - next task
       - take over
       - what should we do next
+      - what should we build next
     load:
+      - memory_index
       - architecture
       - integration_contract
     live_checks:
@@ -84,11 +105,13 @@ routes:
 
   implement_feature:
     match:
-      - implement
+      - implement feature
       - add feature
-      - build
+      - build feature
       - change behavior
+      - implement
     load:
+      - memory_index
       - architecture
       - core_types
       - public_api
@@ -101,10 +124,13 @@ routes:
 
   repair_review_findings:
     match:
-      - fix review
+      - fix review finding
+      - repair review finding
       - repair finding
       - address reviewer
+      - fix reviewer feedback
     load:
+      - memory_index
       - architecture
     live_checks:
       - exact PR head SHA
@@ -119,7 +145,9 @@ routes:
       - review exact head
       - independent review
       - review PR
+      - exact head review
     load:
+      - memory_index
       - architecture
     live_checks:
       - PR open and unmerged
@@ -132,11 +160,15 @@ routes:
 
   ci_failure:
     match:
-      - CI failed
-      - build failed
-      - test failed
-      - runner failed
+      - CI fail
+      - CI failing
+      - build fail
+      - test fail
+      - runner fail
+      - why did CI fail
+      - why did build fail
     load:
+      - memory_index
       - package_manifest
     live_checks:
       - exact failing run belongs to current head
@@ -145,6 +177,59 @@ routes:
       - start from logs and failed commands
       - expand into source only when the evidence requires it
 
+  setup_onboarding:
+    match:
+      - setup RepoBrain
+      - initialize RepoBrain
+      - onboarding
+      - install RepoBrain
+      - workflow preset
+    load:
+      - memory_index
+      - readme
+      - workflow_modes
+      - cli_reference
+      - integration_contract
+    live_checks:
+      - current package version when installation details matter
+    then:
+      - choose the lightest workflow preset that satisfies the repository's review requirements
+
+  memory_review:
+    match:
+      - review memories
+      - approve memories
+      - candidate memory
+      - promote candidates
+      - memory candidates
+    load:
+      - memory_index
+      - team_workflow
+      - schema
+      - cli_reference
+    live_checks:
+      - current candidate queue
+    then:
+      - preserve candidate-first review
+      - do not promote ambiguous or low-signal memory automatically
+
+  memory_maintenance:
+    match:
+      - memory maintenance
+      - audit memory
+      - stale memory
+      - clean memory
+      - sweep memory
+    load:
+      - memory_index
+      - schema
+      - temporal_semantics
+      - cli_reference
+    live_checks:
+      - current memory audit and schema health
+    then:
+      - prefer deterministic audit and lifecycle commands over manual file edits
+
   memory_or_context:
     match:
       - memory
@@ -152,7 +237,9 @@ routes:
       - routing
       - RepoBrain
       - agent instructions
+      - navigation
     load:
+      - memory_index
       - architecture
       - schema
       - temporal_semantics
@@ -172,8 +259,11 @@ routes:
       - model routing
       - parallel agent
     load:
+      - memory_index
       - codex_contract
       - codex_adapter
+      - codex_install
+      - codex_session_start
       - codex_personal_defaults
       - integration_contract
     live_checks:
@@ -191,6 +281,7 @@ routes:
       - handoff
       - controller transfer
     load:
+      - memory_index
       - architecture
       - orchestrator_lifecycle
       - orchestrator_rotation
@@ -210,6 +301,7 @@ routes:
       - npm
       - package
     load:
+      - memory_index
       - package_manifest
       - release_checklist
       - release_guide
