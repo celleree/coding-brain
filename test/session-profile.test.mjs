@@ -296,6 +296,42 @@ await runTest("CLI session-clear removes session profile", async () => {
   }
 });
 
+
+await runTest("CLI share prepares a linked safe index without raw source evidence by default", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "repobrain-share-"));
+
+  try {
+    await initBrain(tmpDir);
+    await saveMemory(
+      {
+        type: "decision",
+        title: "CLI share memory",
+        summary: "safe shared summary",
+        detail: "## DECISION\n\nprivate raw capture body",
+        tags: ["share"],
+        importance: "high",
+        date: "2026-04-01T12:00:00.000Z",
+        status: "active",
+      },
+      tmpDir,
+    );
+
+    const result = await runCli(["share", "--all-active"], tmpDir, "");
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Prepared portable index: \.brain\/shared\/index\.md/);
+    assert.match(result.stdout, /git add -f .*\.brain\/shared\/index\.md/);
+    assert.match(result.stdout, /git add -f .*\.brain\/decisions\//);
+    assert.doesNotMatch(result.stdout, /git add -f .*sources\/sha256/);
+
+    const sharedIndex = await readFile(path.join(tmpDir, ".brain", "shared", "index.md"), "utf8");
+    assert.match(sharedIndex, /CLI share memory/);
+    assert.match(sharedIndex, /\.\.\/decisions\//);
+    assert.doesNotMatch(sharedIndex, /private raw capture body/);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 console.log("All session profile tests passed.");
 
 async function writeSessionProfile(projectRoot, data) {
