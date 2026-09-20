@@ -1,4 +1,4 @@
-import { buildAgentNavigationPlan, renderAgentNavigationPlan, type AgentNavigationPlan } from "./agent-navigation.js";
+import { buildAgentNavigationPlan, type AgentNavigationPlan } from "./agent-navigation.js";
 import { buildInjection } from "./inject.js";
 import {
   buildSkillShortlist,
@@ -134,6 +134,18 @@ export async function buildTaskRoutingBundle(
     ...(expansionPlan ? { expansion_plan: expansionPlan } : {}),
     ...(navigation.plan ? { navigation_plan: navigation.plan } : {}),
   };
+}
+
+export function renderAgentNavigationPlan(plan: AgentNavigationPlan): string {
+  return [
+    "## Repository Navigation",
+    "",
+    `- route: ${plan.route_id}`,
+    `- match: ${plan.match_kind}`,
+    `- sources: ${plan.source_paths.join(", ") || "None."}`,
+    `- live checks: ${plan.live_checks.join("; ") || "None."}`,
+    `- next steps: ${plan.next_steps.join("; ") || "None."}`,
+  ].join("\n");
 }
 
 export function renderTaskRoutingBundle(bundle: TaskRoutingBundle): string {
