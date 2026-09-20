@@ -45,6 +45,7 @@ interface RouteCandidate {
   route: NavigationRoute;
   priority: number;
   matchedTerms: string[];
+  matchStart: number;
   specificity: number;
   score: number;
 }
@@ -84,41 +85,55 @@ export async function buildAgentNavigationPlan(projectRoot: string, task: string
     return { warnings: [...warnings, "Agent navigation manifest has no usable routes."] };
   }
 
-  const loadIds = readStringList(
-    selected.route.load,
-    `route "${selected.routeId}" load`,
-    warnings,
-    true,
-  );
-  const liveChecks = readStringList(
-    selected.route.live_checks,
-    `route "${selected.routeId}" live_checks`,
-    warnings,
-    true,
-  );
-  const nextSteps = readStringList(
-    selected.route.then,
-    `route "${selected.routeId}" then`,
-    warnings,
-    true,
-  );
+  const selectedRouteIssues = validateSelectedRoute(selected.route, selected.routeId);
+  warnings.push(...selectedRouteIssues);
+
+  if (selected.matchKind === "fallback") {
+    warnings.push(
+      `No navigation route matched task intent; using "${selected.routeId}" as the fallback route.`,
+    );
+  }
+
+  if (selectedRouteIssues.length > 0) {
+    warnings.push(
+      `Selected navigation route "${selected.routeId}" is invalid; navigation plan withheld.`,
+    );
+    return { warnings };
+  }
+
+  const loadIds = stringList(selected.route.load);
+  const liveChecks = stringList(selected.route.live_checks);
+  const nextSteps = stringList(selected.route.then);
   const sourcePaths: string[] = [];
   const unavailableOptionalSources: string[] = [];
+  let selectedSourceInvalid = false;
 
   for (const sourceId of loadIds) {
     const source = (manifest.sources as Record<string, unknown>)[sourceId];
     if (!isRecord(source) || typeof (source as NavigationSource).path !== "string") {
-      warnings.push(`Agent navigation route "${selected.routeId}" references unknown source "${sourceId}".`);
+      warnings.push(
+        `Agent navigation route "${selected.routeId}" references invalid source "${sourceId}".`,
+      );
+      selectedSourceInvalid = true;
       continue;
     }
 
     const sourcePath = normalizeRepoPath((source as NavigationSource).path as string);
     if (!sourcePath) {
       warnings.push(`Agent navigation source "${sourceId}" has an empty path.`);
+      selectedSourceInvalid = true;
       continue;
     }
 
-    const optional = readOptionalBoolean((source as NavigationSource).optional, sourceId, warnings);
+    const optionalValue = (source as NavigationSource).optional;
+    if (optionalValue !== undefined && typeof optionalValue !== "boolean") {
+      warnings.push(
+        `Agent navigation source "${sourceId}" optional must be a boolean when present.`,
+      );
+      selectedSourceInvalid = true;
+      continue;
+    }
+    const optional = optionalValue === true;
 
     try {
       await access(path.join(projectRoot, sourcePath));
@@ -127,15 +142,19 @@ export async function buildAgentNavigationPlan(projectRoot: string, task: string
       if (optional) {
         unavailableOptionalSources.push(sourcePath);
       } else {
-        warnings.push(`Agent navigation source "${sourceId}" is missing at "${sourcePath}".`);
+        warnings.push(
+          `Agent navigation source "${sourceId}" is missing at "${sourcePath}".`,
+        );
+        selectedSourceInvalid = true;
       }
     }
   }
 
-  if (selected.matchKind === "fallback") {
+  if (selectedSourceInvalid) {
     warnings.push(
-      `No navigation route matched task intent; using "${selected.routeId}" as the fallback route.`,
+      `Selected navigation route "${selected.routeId}" has invalid required sources; navigation plan withheld.`,
     );
+    return { warnings };
   }
 
   return {
@@ -179,7 +198,7 @@ function selectRoute(
   task: string,
   warnings: string[],
 ): (RouteCandidate & { matchKind: AgentNavigationMatchKind }) | null {
-  const taskTokens = new Set(normalizeIntentTokens(task));
+  const taskTokens = normalizeIntentTokens(task);
   const candidates: RouteCandidate[] = [];
 
   for (const [routeId, rawRoute] of Object.entries(routes)) {
@@ -190,10 +209,22 @@ function selectRoute(
 
     const route = rawRoute as NavigationRoute;
     const priority = readRoutePriority(route.priority, routeId, warnings);
-    const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings, true);
-    const matchedTerms = matchTerms.filter((term) => phraseMatchesTask(term, taskTokens));
-    const specificity = matchedTerms.reduce(
-      (highest, term) => Math.max(highest, normalizeIntentTokens(term).length),
+    const matchTerms = readStringList(
+      route.match,
+      `route "${routeId}" match`,
+      warnings,
+      true,
+    );
+    const phraseMatches = matchTerms
+      .map((term) => findPhraseMatch(term, taskTokens))
+      .filter((match): match is PhraseMatch => match !== null);
+    const matchedTerms = phraseMatches.map((match) => match.term);
+    const matchStart = phraseMatches.reduce(
+      (earliest, match) => Math.min(earliest, match.start),
+      Number.POSITIVE_INFINITY,
+    );
+    const specificity = phraseMatches.reduce(
+      (highest, match) => Math.max(highest, match.tokenCount),
       0,
     );
     const score = matchedTerms.reduce(
@@ -201,11 +232,20 @@ function selectRoute(
       0,
     );
 
-    candidates.push({ routeId, route, priority, matchedTerms, specificity, score });
+    candidates.push({
+      routeId,
+      route,
+      priority,
+      matchedTerms,
+      matchStart,
+      specificity,
+      score,
+    });
   }
 
   candidates.sort(
     (left, right) =>
+      left.matchStart - right.matchStart ||
       right.specificity - left.specificity ||
       right.priority - left.priority ||
       right.score - left.score ||
@@ -223,9 +263,38 @@ function selectRoute(
   return selected ? { ...selected, matchKind: "fallback" } : null;
 }
 
-function phraseMatchesTask(term: string, taskTokens: Set<string>): boolean {
+interface PhraseMatch {
+  term: string;
+  start: number;
+  tokenCount: number;
+}
+
+function findPhraseMatch(term: string, taskTokens: string[]): PhraseMatch | null {
   const termTokens = normalizeIntentTokens(term);
-  return termTokens.length > 0 && termTokens.every((token) => taskTokens.has(token));
+  if (termTokens.length === 0) return null;
+
+  let taskIndex = 0;
+  let start = -1;
+
+  for (const termToken of termTokens) {
+    let found = -1;
+    for (let index = taskIndex; index < taskTokens.length; index += 1) {
+      if (taskTokens[index] === termToken) {
+        found = index;
+        break;
+      }
+    }
+
+    if (found < 0) return null;
+    if (start < 0) start = found;
+    taskIndex = found + 1;
+  }
+
+  return {
+    term,
+    start,
+    tokenCount: termTokens.length,
+  };
 }
 
 function scoreMatchedPhrase(term: string): number {
@@ -294,6 +363,48 @@ function readStringList(
   }
 
   return values;
+}
+
+function validateSelectedRoute(route: NavigationRoute, routeId: string): string[] {
+  const issues: string[] = [];
+
+  if (route.priority !== undefined && (typeof route.priority !== "number" || !Number.isFinite(route.priority))) {
+    issues.push(
+      `Agent navigation route "${routeId}" priority must be a finite number when present.`,
+    );
+  }
+
+  for (const [fieldName, value] of [
+    ["match", route.match],
+    ["load", route.load],
+    ["live_checks", route.live_checks],
+    ["then", route.then],
+  ] as const) {
+    if (!isNonEmptyStringArray(value)) {
+      issues.push(
+        `Agent navigation route "${routeId}" ${fieldName} must be a non-empty string array.`,
+      );
+    }
+  }
+
+  return issues;
+}
+
+function isNonEmptyStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((entry) => typeof entry === "string" && entry.trim().length > 0)
+  );
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    : [];
 }
 
 function readRoutePriority(value: unknown, routeId: string, warnings: string[]): number {
