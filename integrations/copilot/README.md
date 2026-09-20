@@ -7,7 +7,7 @@ GitHub Copilot works best as a contract-aware custom-instructions adapter. It ca
 ```text
 session start
   -> brain start --format json (preferred); brain inject (fallback)
-  -> Copilot reads context_markdown and skill_plan
+  -> Copilot reads context_markdown, skill_plan, and navigation_plan when present
 fresh conversation later in same session
   -> brain conversation-start --format json --task "<task>" --path <path>
   -> Copilot follows RepoBrain's start / inject / skip decision
