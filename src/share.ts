@@ -1,106 +1,133 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { Memory, StoredMemoryRecord } from "./types.js";
-import { getMemoryStatus, loadStoredMemoryRecords } from "./store.js";
+import { sourceBlobRelativePath } from "./store/source-store.js";
+import { getMemoryStatus, loadStoredMemoryRecords, verifyMemoryProvenance } from "./store.js";
+import type { StoredMemoryRecord } from "./types.js";
+
+export const SHARED_MEMORY_INDEX_PATH = path.join(".brain", "shared", "index.md");
 
 export interface SharePlan {
   records: StoredMemoryRecord[];
+  sourcePaths: string[];
+  sharedIndexPath: string;
+  sharedIndexContent: string;
+  includeSourceEvidence: boolean;
+  warnings: string[];
   commitMessage: string;
   addCommands: string[];
 }
 
 export async function buildSharePlan(
   projectRoot: string,
-  options: { allActive?: boolean; memoryId?: string },
+  options: { allActive?: boolean; memoryId?: string; includeSourceEvidence?: boolean },
 ): Promise<SharePlan> {
-  const records = await loadStoredMemoryRecords(projectRoot);
-  const activeRecords = records.filter((entry) => getMemoryStatus(entry.memory) === "active");
+  const active = (await loadStoredMemoryRecords(projectRoot)).filter(
+    (entry) => getMemoryStatus(entry.memory) === "active",
+  );
+  const selected = options.allActive ? active : selectOne(active, options.memoryId);
 
-  if (options.allActive) {
-    if (activeRecords.length === 0) {
-      throw new Error("No active memories found.");
-    }
+  if (selected.length === 0) throw new Error("No active memories found.");
+  await assertShareable(projectRoot, selected);
 
-    return createSharePlan(projectRoot, activeRecords);
-  }
-
-  const memoryId = options.memoryId?.trim();
-  if (!memoryId) {
-    throw new Error('Provide a memory id or use "--all-active".');
-  }
-
-  const matches = matchStoredMemories(activeRecords, memoryId);
-  if (matches.length === 0) {
-    throw new Error(`No active memory matched "${memoryId}".`);
-  }
-
-  if (matches.length > 1) {
-    const suggestions = matches.map((entry) => `- ${getCandidateId(entry)} (${entry.memory.title})`);
-    throw new Error([`Multiple memories matched "${memoryId}". Use a more specific id:`, ...suggestions].join("\n"));
-  }
-
-  return createSharePlan(projectRoot, matches);
-}
-
-function createSharePlan(projectRoot: string, records: StoredMemoryRecord[]): SharePlan {
-  const sortedRecords = [...records].sort((left, right) => right.memory.date.localeCompare(left.memory.date));
-  const addCommands = sortedRecords.map((entry) => `git add ${quoteForShell(entry.relativePath)}`);
+  const records = [...selected].sort((a, b) => b.memory.date.localeCompare(a.memory.date));
+  const includeSourceEvidence = Boolean(options.includeSourceEvidence);
+  const sourcePaths = includeSourceEvidence
+    ? [...new Set(records.map((entry) => sourceBlobRelativePath(requireSource(entry))))]
+    : [];
+  const addPaths = [
+    ...records.map((entry) => entry.relativePath),
+    SHARED_MEMORY_INDEX_PATH,
+    ...sourcePaths,
+  ].map(normalizePath);
 
   return {
-    records: sortedRecords,
-    addCommands,
-    commitMessage: buildCommitMessage(sortedRecords),
+    records,
+    sourcePaths,
+    sharedIndexPath: normalizePath(SHARED_MEMORY_INDEX_PATH),
+    sharedIndexContent: renderSharedIndex(records, includeSourceEvidence),
+    includeSourceEvidence,
+    warnings: [
+      includeSourceEvidence
+        ? "Raw provenance source evidence is included. Review selected blobs before committing."
+        : "Raw provenance source evidence is excluded by default.",
+    ],
+    commitMessage: buildCommitMessage(records),
+    addCommands: [...new Set(addPaths)].map((entry) => `git add -f ${JSON.stringify(entry)}`),
   };
 }
 
-function matchStoredMemories(records: StoredMemoryRecord[], rawQuery: string): StoredMemoryRecord[] {
-  const query = normalizeIdentifier(rawQuery);
+export async function writeShareIndex(projectRoot: string, plan: SharePlan): Promise<void> {
+  const target = path.join(projectRoot, plan.sharedIndexPath);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, plan.sharedIndexContent, "utf8");
+}
 
-  return records.filter((entry) => {
-    const relativePath = normalizeIdentifier(entry.relativePath);
-    const fileName = normalizeIdentifier(path.basename(entry.filePath, path.extname(entry.filePath)));
-    const candidateId = normalizeIdentifier(getCandidateId(entry));
-    const title = normalizeIdentifier(entry.memory.title);
+async function assertShareable(projectRoot: string, records: StoredMemoryRecord[]): Promise<void> {
+  for (const entry of records) {
+    const result = await verifyMemoryProvenance(projectRoot, entry.memory, entry.relativePath);
+    if (!result.ok) {
+      throw new Error(
+        `Cannot share memory "${entry.memory.title}": ${result.reason ?? "provenance verification failed"}.`,
+      );
+    }
+  }
+}
 
-    return relativePath.includes(query) || fileName === query || candidateId === query || title.includes(query);
+function selectOne(records: StoredMemoryRecord[], rawId?: string): StoredMemoryRecord[] {
+  const query = rawId?.trim();
+  if (!query) throw new Error('Provide a memory id or use "--all-active".');
+  const normalized = normalizeId(query);
+  const matches = records.filter((entry) => {
+    const file = path.basename(entry.filePath, path.extname(entry.filePath));
+    return (
+      normalizeId(entry.relativePath).includes(normalized) ||
+      normalizeId(file) === normalized ||
+      normalizeId(entry.memory.title).includes(normalized)
+    );
   });
+  if (matches.length === 0) throw new Error(`No active memory matched "${query}".`);
+  if (matches.length > 1) {
+    throw new Error(`Multiple memories matched "${query}". Use a more specific id.`);
+  }
+  return matches;
+}
+
+function renderSharedIndex(records: StoredMemoryRecord[], includeSourceEvidence: boolean): string {
+  const lines = [
+    "# RepoBrain Shared Memory Index",
+    "",
+    "Contains only memories explicitly selected by `brain share`.",
+    `Source evidence included: ${includeSourceEvidence ? "yes" : "no"}`,
+    "",
+  ];
+  for (const entry of records) {
+    const relative = normalizePath(entry.relativePath).replace(/^\.brain\//u, "");
+    lines.push(`- [${entry.memory.title}](../${relative}) | ${entry.memory.type} | ${entry.memory.date}`);
+    lines.push(`  - ${entry.memory.summary}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function requireSource(entry: StoredMemoryRecord): string {
+  if (!entry.memory.source_episode) {
+    throw new Error(`Memory "${entry.memory.title}" has no source_episode.`);
+  }
+  return entry.memory.source_episode;
 }
 
 function buildCommitMessage(records: StoredMemoryRecord[]): string {
   if (records.length === 1) {
-    const [entry] = records;
-    if (!entry) {
-      return "brain: sync active memories";
-    }
-
-    return `brain: add ${entry.memory.type} - ${toCommitSummary(entry.memory.title)}`;
+    return `brain: add ${records[0]?.memory.type} - ${records[0]?.memory.title.slice(0, 72)}`;
   }
-
-  const typeCounts = new Map<string, number>();
-  for (const entry of records) {
-    typeCounts.set(entry.memory.type, (typeCounts.get(entry.memory.type) ?? 0) + 1);
-  }
-
-  const summary = Array.from(typeCounts.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([type, count]) => `${count} ${type}${count === 1 ? "" : "s"}`)
-    .join(", ");
-
-  return `brain: sync active memories - ${summary}`;
+  return `brain: sync ${records.length} active memories`;
 }
 
-function toCommitSummary(title: string): string {
-  return title.replace(/\s+/g, " ").trim().slice(0, 72);
-}
-
-function normalizeIdentifier(value: string): string {
+function normalizeId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-");
 }
 
-function getCandidateId(entry: StoredMemoryRecord): string {
-  return path.basename(entry.filePath, path.extname(entry.filePath));
-}
-
-function quoteForShell(value: string): string {
-  return JSON.stringify(value.replace(/\\/g, "/"));
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, "/");
 }
