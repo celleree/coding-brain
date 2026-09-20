@@ -189,16 +189,16 @@ await runTest("includeSessionProfile false skips session routing signals", async
   });
 });
 
-await runTest("share plan never references runtime session files", async () => {
+await runTest("share plan force-adds only selected memory artifacts by default", async () => {
   await withTempRepo(async (projectRoot) => {
     await saveMemory(
       {
-        type: "working",
+        type: "decision",
         title: "Shareable",
         summary: "x",
-        detail: "## WORKING\n\ny",
-        tags: [],
-        importance: "low",
+        detail: "## DECISION\n\ny",
+        tags: ["share"],
+        importance: "medium",
         date: "2026-04-01T10:00:00.000Z",
         score: 60,
         hit_count: 0,
@@ -213,8 +213,47 @@ await runTest("share plan never references runtime session files", async () => {
 
     const plan = await buildSharePlan(projectRoot, { allActive: true });
     const joined = plan.addCommands.join("\n");
+
+    assert.equal(plan.includeSourceEvidence, false);
+    assert.equal(plan.sourcePaths.length, 0);
+    assert.ok(plan.addCommands.every((command) => command.startsWith("git add -f ")));
+    assert.match(joined, /\.brain\/decisions\//);
+    assert.match(joined, /\.brain\/shared\/index\.md/);
+    assert.doesNotMatch(joined, /sources\/sha256/);
     assert.doesNotMatch(joined, /runtime/);
-    assert.ok(plan.records.every((r) => !r.relativePath.includes("runtime")));
+    assert.doesNotMatch(joined, /routing-feedback/);
+    assert.match(plan.sharedIndexContent, /\[Shareable\]\(\.\.\/decisions\//);
+    assert.match(plan.warnings.join("\n"), /source evidence is excluded/i);
+  });
+});
+
+await runTest("share plan includes only exact provenance blobs when explicitly requested", async () => {
+  await withTempRepo(async (projectRoot) => {
+    await saveMemory(
+      {
+        type: "decision",
+        title: "Portable",
+        summary: "portable summary",
+        detail: "## DECISION\n\nportable detail",
+        tags: [],
+        importance: "high",
+        date: "2026-04-01T11:00:00.000Z",
+        status: "active",
+      },
+      projectRoot,
+    );
+
+    const plan = await buildSharePlan(projectRoot, {
+      allActive: true,
+      includeSourceEvidence: true,
+    });
+    const joined = plan.addCommands.join("\n");
+
+    assert.equal(plan.includeSourceEvidence, true);
+    assert.equal(plan.sourcePaths.length, 1);
+    assert.match(plan.sourcePaths[0], /^\.brain\/sources\/sha256\/[a-f0-9]{2}\/[a-f0-9]{64}\.blob$/);
+    assert.match(joined, /sources\/sha256/);
+    assert.match(plan.warnings.join("\n"), /review the selected source blob contents/i);
   });
 });
 
