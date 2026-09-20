@@ -23,11 +23,11 @@ If this is a later fresh conversation in the same session, use `brain conversati
 Read, in order:
 
 1. `docs/brain/START_HERE.md`
-2. `.brain/index.md` when it exists in the repository, then only the relevant linked active memory files
+2. `.brain/shared/index.md` when it exists in the repository, then only the relevant linked active memory files
 3. `docs/brain/ROUTES.yaml`
 4. only the canonical sources selected by the matching route
 
-If `.brain/index.md` is unavailable, do not silently assume there is no durable RepoBrain knowledge. Treat durable-memory context as unavailable on this surface and say so. The repository is configured so reviewed durable `.brain/` knowledge can be shared through Git; local-only runtime state remains ignored.
+If `.brain/shared/index.md` is unavailable, do not silently assume there is no durable RepoBrain knowledge. Treat durable-memory context as unavailable on this surface and say so. The repository keeps `.brain/` private by default. Reviewed durable knowledge is shared only through explicit `brain share` force-add commands.
 
 Do not ask the user to remember file names or internal workflow details that the repository can discover.
 
