@@ -168,8 +168,11 @@ routes:
       - CI fail
       - CI failing
       - build fail
+      - failing build
       - test fail
+      - failing test
       - runner fail
+      - failing runner
       - why did CI fail
       - why did build fail
     load:
