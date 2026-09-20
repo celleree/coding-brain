@@ -1,6 +1,0 @@
-# RepoBrain durable knowledge may be shared through Git.
-# Keep only local/derived state out of repository history.
-runtime/
-activity.json
-errors.log
-memory-index.json
