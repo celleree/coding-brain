@@ -95,8 +95,9 @@ brain diff --since 2026-04-01T00:00:00Z --format json
 
 ## Team and Integrations
 
-- `brain share <memory-id>`
-- `brain share --all-active`
+- `brain share <memory-id>`: explicitly share one verified active memory plus the portable shared index
+- `brain share --all-active`: share all verified active memories
+- `brain share --include-source-evidence`: also include only the selected memories' exact verified provenance blobs
 - `brain mcp`
 
 ## Global Debugging
