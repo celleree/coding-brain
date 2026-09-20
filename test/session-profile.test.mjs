@@ -189,22 +189,17 @@ await runTest("includeSessionProfile false skips session routing signals", async
   });
 });
 
-await runTest("share plan never references runtime session files", async () => {
+await runTest("safe share force-adds only selected records and the shared index by default", async () => {
   await withTempRepo(async (projectRoot) => {
     await saveMemory(
       {
-        type: "working",
+        type: "decision",
         title: "Shareable",
-        summary: "x",
-        detail: "## WORKING\n\ny",
+        summary: "safe summary",
+        detail: "## DECISION\n\nprivate source body",
         tags: [],
-        importance: "low",
+        importance: "medium",
         date: "2026-04-01T10:00:00.000Z",
-        score: 60,
-        hit_count: 0,
-        last_used: null,
-        created_at: "2026-04-01",
-        stale: false,
         status: "active",
       },
       projectRoot,
@@ -213,8 +208,76 @@ await runTest("share plan never references runtime session files", async () => {
 
     const plan = await buildSharePlan(projectRoot, { allActive: true });
     const joined = plan.addCommands.join("\n");
+
+    assert.equal(plan.includeSourceEvidence, false);
+    assert.equal(plan.sourcePaths.length, 0);
+    assert.ok(plan.addCommands.every((command) => command.startsWith("git add -f ")));
+    assert.match(joined, /\.brain\/shared\/index\.md/);
+    assert.doesNotMatch(joined, /sources\/sha256/);
     assert.doesNotMatch(joined, /runtime/);
-    assert.ok(plan.records.every((r) => !r.relativePath.includes("runtime")));
+    assert.match(plan.sharedIndexContent, /\[Shareable\]\(\.\.\/decisions\//);
+    assert.doesNotMatch(plan.sharedIndexContent, /private source body/);
+  });
+});
+
+await runTest("source-evidence share adds only the selected provenance blob", async () => {
+  await withTempRepo(async (projectRoot) => {
+    await saveMemory(
+      {
+        type: "decision",
+        title: "Portable",
+        summary: "portable summary",
+        detail: "## DECISION\n\nportable detail",
+        tags: [],
+        importance: "high",
+        date: "2026-04-01T11:00:00.000Z",
+        status: "active",
+      },
+      projectRoot,
+    );
+
+    const plan = await buildSharePlan(projectRoot, {
+      allActive: true,
+      includeSourceEvidence: true,
+    });
+    assert.equal(plan.sourcePaths.length, 1);
+    assert.match(
+      plan.sourcePaths[0].replace(/\\/g, "/"),
+      /^\.brain\/sources\/sha256\/[a-f0-9]{2}\/[a-f0-9]{64}\.blob$/,
+    );
+    assert.match(plan.warnings.join("\n"), /review selected blobs/i);
+  });
+});
+
+await runTest("share rejects tampered memory records in both modes", async () => {
+  await withTempRepo(async (projectRoot) => {
+    await saveMemory(
+      {
+        type: "decision",
+        title: "Integrity checked",
+        summary: "trusted summary",
+        detail: "## DECISION\n\ntrusted detail",
+        tags: [],
+        importance: "high",
+        date: "2026-04-01T12:00:00.000Z",
+        status: "active",
+      },
+      projectRoot,
+    );
+
+    const valid = await buildSharePlan(projectRoot, { allActive: true });
+    const record = valid.records[0];
+    const raw = await readFile(record.filePath, "utf8");
+    await writeFile(record.filePath, raw.replace("trusted summary", "tampered summary"), "utf8");
+
+    await assert.rejects(
+      () => buildSharePlan(projectRoot, { allActive: true }),
+      /record digest mismatch/i,
+    );
+    await assert.rejects(
+      () => buildSharePlan(projectRoot, { allActive: true, includeSourceEvidence: true }),
+      /record digest mismatch/i,
+    );
   });
 });
 
