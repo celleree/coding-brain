@@ -12,7 +12,6 @@ Existing project knowledge was not moved, renamed, rewritten, or deleted. The na
 - `docs/brain/START_HERE.md`
 - `docs/brain/ROUTES.yaml`
 - `docs/brain/MIGRATION_AUDIT.md`
-- `.brain/.gitignore`
 
 ## Runtime integration
 
@@ -27,20 +26,20 @@ The navigation layer is consumed automatically by existing task routing:
 
 ## Durable-memory bridge for repository-reading agents
 
-The previous repository-level `.gitignore` ignored the entire `.brain/` tree even though RepoBrain architecture treats durable repo knowledge as Git-shareable.
+The repository-level `.gitignore` continues to ignore the entire `.brain/` tree by default. This prevents ordinary `git add .` from staging raw capture evidence, candidates, temporary working state, routing feedback, reinforcement state, runtime files, or other local RepoBrain data.
 
-This change removes that blanket ignore and adds `.brain/.gitignore` that excludes only local/derived state:
+Sharing is explicit and allowlisted through `brain share`:
 
-- `runtime/`
-- `activity.json`
-- `errors.log`
-- `memory-index.json`
+- selected active memory record files are added with `git add -f`;
+- `.brain/shared/index.md` is generated from only those selected records and links directly to them;
+- raw provenance source blobs are excluded by default;
+- `--include-source-evidence` adds only the exact source blobs required by the selected records, with an explicit warning to review the raw evidence before committing.
 
-Reviewed durable memory files, preferences, orchestration state, configuration, source evidence, and the generated `.brain/index.md` can therefore be reviewed and shared through normal Git workflows.
+Repository-reading agents use `.brain/shared/index.md` when present and follow its links to the selected shared records. If that index is absent, instructions require the agent to state that durable-memory context is unavailable rather than silently assuming no memory exists.
 
-Repository-reading agents use `.brain/index.md` when present and load only relevant active memory records. If that index is absent, instructions require the agent to state that durable-memory context is unavailable rather than silently assuming no memory exists.
+A checkout that needs full RepoBrain provenance verification must receive the selected source blobs as well. That requires the explicit `brain share --include-source-evidence` path; the safer default is intended for repository-reading agents that need reviewed memory content without raw capture evidence.
 
-Any workstation-local durable records created while the old blanket ignore was in effect are not deleted by this change and cannot be enumerated from GitHub alone. A shell-capable operator should run `brain share --all-active` after updating to prepare those active records for Git review.
+Any workstation-local durable records created while `.brain/` is ignored are not deleted by this change and cannot be enumerated from GitHub alone.
 
 ## Existing information brought into the navigation layer by reference
 
