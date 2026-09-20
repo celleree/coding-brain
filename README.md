@@ -136,7 +136,7 @@ RepoBrain keeps memory local to the repository:
 | Start a task | `brain inject`, `brain conversation-start`, `brain suggest-skills`, `brain route`, `brain start` | Produce context blocks and deterministic routing plans |
 | Inspect memory | `brain list`, `brain diff`, `brain search`, `brain timeline`, `brain explain-memory`, `brain explain-preference` | Explore what the repo already knows and what changed since the last inject |
 | Keep things healthy | `brain status`, `brain next`, `brain audit-memory`, `brain lint-memory`, `brain normalize-memory`, `brain score`, `brain sweep` (`brain gc` alias for auto sweep) | Maintain memory quality over time |
-| Team and adapters | `brain share`, `brain mcp`, `brain reinforce`, `brain routing-feedback` | Share memory, integrate adapters, and close the feedback loop |
+| Team and adapters | `brain share`, `brain mcp`, `brain reinforce`, `brain routing-feedback` | Explicitly share reviewed memory, integrate adapters, and close the feedback loop |
 
 The complete command reference lives in [docs/cli-reference.md](./docs/cli-reference.md).
 
