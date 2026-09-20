@@ -69,7 +69,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/ test/",
     "format": "prettier --write src/ test/",
-    "format:check": "prettier --write src/ test/ && git diff -- src/ test/ && git diff --exit-code -- src/ test/",
+    "format:check": "prettier --check src/ test/",
     "smoke:package": "node scripts/smoke-package.mjs",
     "demo:proof": "node scripts/generate-demo-proof.mjs",
     "proof:bundles": "node scripts/generate-proof-bundles.mjs",
