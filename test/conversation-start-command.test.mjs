@@ -110,6 +110,51 @@ await runTest("conversation-start refreshes compact context when the session pro
   });
 });
 
+
+await runTest("conversation-start inject surfaces navigation warnings in JSON and markdown", async () => {
+  await withTempRepo(async (projectRoot) => {
+    const first = await runCliProcess(
+      ["conversation-start", "--task", "continue project", "--format", "json"],
+      projectRoot,
+    );
+    assert.equal(first.code, 0, first.stderr);
+
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  continue_project:",
+        "    priority: 10",
+        "    match: [continue]",
+        "    load: [readme]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const jsonResult = await runCliProcess(
+      ["conversation-start", "--task", "continue another project", "--format", "json"],
+      projectRoot,
+    );
+    assert.equal(jsonResult.code, 0, jsonResult.stderr);
+    const parsed = JSON.parse(jsonResult.stdout);
+    assert.equal(parsed.action, "inject");
+    assert.ok(parsed.warnings.some((warning) => /live_checks/.test(warning)));
+    assert.ok(parsed.warnings.some((warning) => /then/.test(warning)));
+
+    const markdownResult = await runCliProcess(
+      ["conversation-start", "--task", "continue another project", "--force"],
+      projectRoot,
+    );
+    assert.equal(markdownResult.code, 0, markdownResult.stderr);
+    assert.ok(markdownResult.stdout.includes("## RepoBrain Warnings"));
+    assert.ok(markdownResult.stdout.includes("live_checks"));
+    assert.ok(markdownResult.stdout.includes("next steps: None."));
+  });
+});
+
 console.log("All conversation-start command tests passed.");
 
 async function withTempRepo(callback) {
@@ -126,8 +171,11 @@ async function withTempRepo(callback) {
         "    path: README.md",
         "routes:",
         "  continue_project:",
+        "    priority: 10",
         "    match: [continue]",
         "    load: [readme]",
+        "    live_checks: [current SHA]",
+        "    then: [inspect]",
       ].join("\n"),
       "utf8",
     );
