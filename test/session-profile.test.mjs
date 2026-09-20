@@ -296,7 +296,6 @@ await runTest("CLI session-clear removes session profile", async () => {
   }
 });
 
-
 await runTest("CLI share prepares a linked safe index without raw source evidence by default", async () => {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "repobrain-share-"));
 
