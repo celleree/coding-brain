@@ -67,7 +67,6 @@ export async function writeShareIndex(projectRoot: string, plan: SharePlan): Pro
   await writeFile(indexPath, plan.sharedIndexContent, "utf8");
 }
 
-
 async function assertSourceEvidenceAvailable(projectRoot: string, records: StoredMemoryRecord[]): Promise<void> {
   for (const entry of records) {
     const verification = await verifySourceEpisode(projectRoot, entry.memory.source_episode);
