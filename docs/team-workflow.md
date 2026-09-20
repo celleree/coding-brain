@@ -24,8 +24,9 @@ This guide describes the practical team path for keeping `.brain/` changes revie
 2. Approve the candidates that still look durable.
 3. Inspect the generated markdown under `.brain/`.
 4. Run `brain share <memory-id>` or `brain share --all-active`.
-5. Copy the suggested `git add` and `git commit` commands.
-6. Open the PR with both code and `.brain/` changes when they belong together.
+5. Review the generated `.brain/shared/index.md` and copy the suggested force-add / commit commands.
+6. By default, raw provenance source blobs stay private. Use `--include-source-evidence` only when another shell-capable checkout needs full provenance verification, and review those raw blobs before committing.
+7. Open the PR with the explicitly selected `.brain/` files when they belong together.
 
 ## What Belongs In `.brain/`
 
