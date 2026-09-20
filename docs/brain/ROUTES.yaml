@@ -11,8 +11,8 @@ principles:
 
 sources:
   memory_index:
-    path: .brain/index.md
-    authority: generated-from-durable-memory
+    path: .brain/shared/index.md
+    authority: explicitly-shared-durable-memory
     optional: true
   readme:
     path: README.md
@@ -86,6 +86,7 @@ sources:
 
 routes:
   continue_project:
+    priority: 10
     match:
       - continue
       - next task
@@ -104,6 +105,7 @@ routes:
       - narrow to a more specific route after inspecting current work
 
   implement_feature:
+    priority: 40
     match:
       - implement feature
       - add feature
@@ -123,6 +125,7 @@ routes:
       - preserve existing contracts unless the task explicitly changes them
 
   repair_review_findings:
+    priority: 95
     match:
       - fix review finding
       - repair review finding
@@ -141,6 +144,7 @@ routes:
       - repair the full confirmed defect rather than only the quoted symptom
 
   exact_head_review:
+    priority: 100
     match:
       - review exact head
       - independent review
@@ -159,6 +163,7 @@ routes:
       - do not edit during an independent read-only review
 
   ci_failure:
+    priority: 90
     match:
       - CI fail
       - CI failing
@@ -178,8 +183,10 @@ routes:
       - expand into source only when the evidence requires it
 
   setup_onboarding:
+    priority: 85
     match:
       - setup RepoBrain
+      - set up RepoBrain
       - initialize RepoBrain
       - onboarding
       - install RepoBrain
@@ -196,9 +203,12 @@ routes:
       - choose the lightest workflow preset that satisfies the repository's review requirements
 
   memory_review:
+    priority: 85
     match:
       - review memories
+      - review memory
       - approve memories
+      - approve memory
       - candidate memory
       - promote candidates
       - memory candidates
@@ -214,6 +224,7 @@ routes:
       - do not promote ambiguous or low-signal memory automatically
 
   memory_maintenance:
+    priority: 80
     match:
       - memory maintenance
       - audit memory
@@ -231,6 +242,7 @@ routes:
       - prefer deterministic audit and lifecycle commands over manual file edits
 
   memory_or_context:
+    priority: 20
     match:
       - memory
       - context
@@ -253,6 +265,7 @@ routes:
       - prefer stronger enforcement over adding duplicate prose
 
   codex_workflow:
+    priority: 70
     match:
       - Codex
       - coding agent
@@ -274,6 +287,7 @@ routes:
       - use parallel writers only when ownership is isolated
 
   orchestrator_lifecycle:
+    priority: 75
     match:
       - orchestrator
       - rotation
@@ -295,6 +309,7 @@ routes:
       - do not duplicate memory or execution-routing systems
 
   release:
+    priority: 75
     match:
       - release
       - publish
