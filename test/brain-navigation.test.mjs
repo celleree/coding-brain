@@ -84,6 +84,9 @@ it("routes realistic production intents to the operational route instead of inci
     ["Add a feature to approve memory candidates automatically.", "implement_feature"],
     ["Implement the memory review workflow change.", "implement_feature"],
     ["Add a feature for memory review.", "implement_feature"],
+    ["In Codex, review PR #12. Do not edit.", "exact_head_review"],
+    ["Use Codex to review PR #12 without editing.", "exact_head_review"],
+    ["Do not implement a feature. Review PR #12 without editing.", "exact_head_review"],
   ];
 
   for (const [task, expectedRoute] of cases) {
