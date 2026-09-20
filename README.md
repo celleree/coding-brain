@@ -21,6 +21,7 @@ RepoBrain is local, Git-friendly memory infrastructure for coding agents such as
 - Keep durable repo knowledge in `.brain/` as plain Markdown plus frontmatter.
 - Review memory changes with normal Git workflows instead of hiding them in a hosted black box.
 - Re-inject the right context with `brain conversation-start`, `brain inject`, `brain suggest-skills`, and `brain route`.
+- Start repository-reading agents at [`AI_START_HERE.md`](./AI_START_HERE.md).
 
 ## Quick Start
 
