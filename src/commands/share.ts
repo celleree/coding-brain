@@ -13,45 +13,34 @@ export function register(program: Command): void {
       "--include-source-evidence",
       "Include raw provenance source blobs for full RepoBrain verification on another checkout.",
     )
-    .action(
-      async (
-        memoryId: string | undefined,
-        options: { allActive?: boolean; includeSourceEvidence?: boolean },
-      ) => {
-        const projectRoot = await helpers.resolveProjectRoot();
-        const plan = await buildSharePlan(projectRoot, {
-          ...(options.allActive ? { allActive: true } : {}),
-          ...(memoryId ? { memoryId } : {}),
-          ...(options.includeSourceEvidence ? { includeSourceEvidence: true } : {}),
-        });
+    .action(async (memoryId: string | undefined, options: { allActive?: boolean; includeSourceEvidence?: boolean }) => {
+      const projectRoot = await helpers.resolveProjectRoot();
+      const plan = await buildSharePlan(projectRoot, {
+        ...(options.allActive ? { allActive: true } : {}),
+        ...(memoryId ? { memoryId } : {}),
+        ...(options.includeSourceEvidence ? { includeSourceEvidence: true } : {}),
+      });
 
-        await writeShareIndex(projectRoot, plan);
+      await writeShareIndex(projectRoot, plan);
 
-        output.write(
-          `Share plan for ${plan.records.length} memory${plan.records.length === 1 ? "" : "ies"}:\n`,
-        );
-        for (const entry of plan.records) {
-          output.write(
-            `- ${entry.relativePath.replace(/\\/g, "/")} | ${entry.memory.type} | ${entry.memory.title}\n`,
-          );
-        }
+      output.write(`Share plan for ${plan.records.length} memory${plan.records.length === 1 ? "" : "ies"}:\n`);
+      for (const entry of plan.records) {
+        output.write(`- ${entry.relativePath.replace(/\\/g, "/")} | ${entry.memory.type} | ${entry.memory.title}\n`);
+      }
 
-        output.write(`\nPrepared portable index: ${plan.sharedIndexPath}\n`);
-        output.write(
-          `Raw provenance source evidence: ${plan.includeSourceEvidence ? "included" : "excluded"}\n`,
-        );
+      output.write(`\nPrepared portable index: ${plan.sharedIndexPath}\n`);
+      output.write(`Raw provenance source evidence: ${plan.includeSourceEvidence ? "included" : "excluded"}\n`);
 
-        for (const warning of plan.warnings) {
-          output.write(`WARNING: ${warning}\n`);
-        }
+      for (const warning of plan.warnings) {
+        output.write(`WARNING: ${warning}\n`);
+      }
 
-        output.write("\nSuggested next commands:\n");
-        for (const command of plan.addCommands) {
-          output.write(`${command}\n`);
-        }
-        output.write(`git commit -m ${JSON.stringify(plan.commitMessage)}\n`);
-      },
-    );
+      output.write("\nSuggested next commands:\n");
+      for (const command of plan.addCommands) {
+        output.write(`${command}\n`);
+      }
+      output.write(`git commit -m ${JSON.stringify(plan.commitMessage)}\n`);
+    });
 
   program;
 }
