@@ -24,7 +24,7 @@ This guide describes the practical team path for keeping `.brain/` changes revie
 2. Approve the candidates that still look durable.
 3. Inspect the generated markdown under `.brain/`.
 4. Run `brain share <memory-id>` or `brain share --all-active`.
-5. Copy the suggested `git add` and `git commit` commands.
+5. Review the explicit `git add -f` paths. Raw provenance blobs are excluded unless `--include-source-evidence` was requested.
 6. Open the PR with both code and `.brain/` changes when they belong together.
 
 ## What Belongs In `.brain/`
