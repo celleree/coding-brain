@@ -29,16 +29,16 @@ For a later fresh conversation in the same session, follow the existing `brain c
 ### Repository-reading agent without shell access
 
 1. Read `AI_START_HERE.md`.
-2. Read `.brain/index.md` when it is available in Git, then load only relevant active memory files it points to.
+2. Read `.brain/shared/index.md` when it is available in Git, then load only relevant active memory files it points to.
 3. Read `docs/brain/ROUTES.yaml`.
 4. Classify the user's intent into the closest route.
 5. Load the route's canonical sources only.
 6. Inspect directly relevant code/tests as needed.
 7. Reverify live GitHub state before relying on branch, PR, SHA, review, or CI facts.
 
-If `.brain/index.md` is missing, explicitly mark durable RepoBrain memory as unavailable to the repository-reading surface. Do not infer that no memory exists.
+If `.brain/shared/index.md` is missing, explicitly mark durable RepoBrain memory as unavailable to the repository-reading surface. Do not infer that no memory exists.
 
-Reviewed durable RepoBrain knowledge is intended to be Git-shareable. Local-only runtime/session state stays excluded by `.brain/.gitignore`. A shell-capable operator can use `brain share --all-active` to prepare active durable memory for Git review when needed.
+`.brain/` stays ignored by default. A shell-capable operator can use `brain share --all-active` to generate `.brain/shared/index.md` and force-add only the selected active records. This safe default excludes raw provenance source blobs. Use `--include-source-evidence` only when full shell-to-shell provenance portability is required and the raw evidence has been reviewed for sharing.
 
 Do not ask the user to identify internal files when the route map can determine them.
 
