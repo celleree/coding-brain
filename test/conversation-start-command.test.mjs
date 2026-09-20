@@ -143,6 +143,7 @@ await runTest("conversation-start inject surfaces navigation warnings in JSON an
     assert.equal(parsed.action, "inject");
     assert.ok(parsed.warnings.some((warning) => /live_checks/.test(warning)));
     assert.ok(parsed.warnings.some((warning) => /then/.test(warning)));
+    assert.equal(parsed.navigation_plan, undefined);
 
     const markdownResult = await runCliProcess(
       ["conversation-start", "--task", "continue another project", "--force"],
@@ -151,7 +152,8 @@ await runTest("conversation-start inject surfaces navigation warnings in JSON an
     assert.equal(markdownResult.code, 0, markdownResult.stderr);
     assert.ok(markdownResult.stdout.includes("## RepoBrain Warnings"));
     assert.ok(markdownResult.stdout.includes("live_checks"));
-    assert.ok(markdownResult.stdout.includes("next steps: None."));
+    assert.ok(markdownResult.stdout.includes("navigation plan withheld"));
+    assert.ok(!markdownResult.stdout.includes("## Repository Navigation"));
   });
 });
 
