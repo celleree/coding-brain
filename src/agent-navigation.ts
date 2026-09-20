@@ -28,6 +28,7 @@ interface NavigationSource {
 }
 
 interface NavigationRoute {
+  priority?: unknown;
   match?: unknown;
   load?: unknown;
   live_checks?: unknown;
@@ -42,6 +43,7 @@ interface NavigationManifest {
 interface RouteCandidate {
   routeId: string;
   route: NavigationRoute;
+  priority: number;
   matchedTerms: string[];
   score: number;
 }
@@ -91,11 +93,13 @@ export async function buildAgentNavigationPlan(projectRoot: string, task: string
     selected.route.live_checks,
     `route "${selected.routeId}" live_checks`,
     warnings,
+    true,
   );
   const nextSteps = readStringList(
     selected.route.then,
     `route "${selected.routeId}" then`,
     warnings,
+    true,
   );
   const sourcePaths: string[] = [];
   const unavailableOptionalSources: string[] = [];
@@ -184,18 +188,20 @@ function selectRoute(
     }
 
     const route = rawRoute as NavigationRoute;
-    const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings);
+    const priority = readRoutePriority(route.priority, routeId, warnings);
+    const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings, true);
     const matchedTerms = matchTerms.filter((term) => phraseMatchesTask(term, taskTokens));
     const score = matchedTerms.reduce(
       (highest, term) => Math.max(highest, scoreMatchedPhrase(term)),
       0,
     );
 
-    candidates.push({ routeId, route, matchedTerms, score });
+    candidates.push({ routeId, route, priority, matchedTerms, score });
   }
 
   candidates.sort(
     (left, right) =>
+      right.priority - left.priority ||
       right.score - left.score ||
       right.matchedTerms.length - left.matchedTerms.length ||
       left.routeId.localeCompare(right.routeId),
@@ -282,6 +288,19 @@ function readStringList(
   }
 
   return values;
+}
+
+function readRoutePriority(value: unknown, routeId: string, warnings: string[]): number {
+  if (value === undefined) {
+    return 0;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    warnings.push(`Agent navigation route "${routeId}" priority must be a finite number when present.`);
+    return 0;
+  }
+
+  return value;
 }
 
 function readOptionalBoolean(value: unknown, sourceId: string, warnings: string[]): boolean {
