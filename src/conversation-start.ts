@@ -2,6 +2,7 @@ import {
   buildAgentNavigationPlan,
   renderAgentNavigationPlan,
   type AgentNavigationPlan,
+  type AgentNavigationResult,
 } from "./agent-navigation.js";
 import { buildInjection } from "./inject.js";
 import { loadSessionProfile, sessionProfileHasVisibleContent } from "./session-profile.js";
@@ -146,7 +147,7 @@ export async function buildConversationStart(
       }),
       task
         ? buildAgentNavigationPlan(projectRoot, task)
-        : Promise.resolve({ warnings: [] }),
+        : Promise.resolve<AgentNavigationResult>({ warnings: [] }),
     ]);
 
     return {
