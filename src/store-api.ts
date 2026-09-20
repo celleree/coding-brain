@@ -60,6 +60,8 @@ export {
   renderExtractSuggestionMarkdown,
 } from "./extract-suggestion.js";
 export { buildFailureDetectionPrompt, detectFailures } from "./failure-detector.js";
+export { buildAgentNavigationPlan, AGENT_NAVIGATION_MANIFEST_PATH } from "./agent-navigation.js";
+export type { AgentNavigationPlan, AgentNavigationResult } from "./agent-navigation.js";
 export {
   buildSkillShortlist,
   collectGitDiffPaths,
