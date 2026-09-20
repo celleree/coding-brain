@@ -7,7 +7,7 @@ Codex is intentionally a thin workflow adapter. The goal is not to build a Codex
 ```text
 new session
   -> brain start --format json
-  -> Codex reads context_markdown and skill_plan
+  -> Codex reads context_markdown, skill_plan, and navigation_plan when present
 fresh conversation later in same session
   -> brain conversation-start --format json --task "<task>" --path <path>
   -> Codex follows RepoBrain's start / inject / skip decision
