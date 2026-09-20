@@ -31,6 +31,15 @@ export function sourceEpisodeForBytes(bytes: Uint8Array): string {
   return `sha256:${sha256(bytes)}`;
 }
 
+export function sourceBlobRelativePath(reference: string): string {
+  const digest = parseDigestReference(reference);
+  if (!digest) {
+    throw new Error(`Invalid source_episode reference: ${reference}`);
+  }
+
+  return path.join(".brain", "sources", "sha256", digest.slice(0, 2), `${digest}.blob`);
+}
+
 export async function persistSourceBytes(projectRoot: string, bytes: Uint8Array): Promise<string> {
   const prepared = await prepareSourceBlobWrite(projectRoot, bytes);
   await commitAtomicWriteOperations([prepared.operation]);
@@ -222,7 +231,7 @@ function normalizeRelativePath(value: string): string {
 }
 
 function getSourceBlobPath(projectRoot: string, digest: string): string {
-  return path.join(getBrainDir(projectRoot), "sources", "sha256", digest.slice(0, 2), `${digest}.blob`);
+  return path.join(projectRoot, sourceBlobRelativePath(`sha256:${digest}`));
 }
 
 function parseDigestReference(reference: string | undefined): string | null {
