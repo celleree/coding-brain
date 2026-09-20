@@ -30,6 +30,7 @@ interface NavigationSource {
 interface NavigationRoute {
   priority?: unknown;
   match?: unknown;
+  context_match?: unknown;
   load?: unknown;
   live_checks?: unknown;
   then?: unknown;
@@ -45,9 +46,13 @@ interface RouteCandidate {
   route: NavigationRoute;
   priority: number;
   matchedTerms: string[];
+  contextTerms: string[];
   matchStart: number;
+  contextStart: number;
   specificity: number;
+  contextSpecificity: number;
   score: number;
+  contextScore: number;
 }
 
 export async function buildAgentNavigationPlan(projectRoot: string, task: string): Promise<AgentNavigationResult> {
@@ -206,29 +211,55 @@ function selectRoute(
     const route = rawRoute as NavigationRoute;
     const priority = readRoutePriority(route.priority, routeId, warnings);
     const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings, true);
+    const contextMatchTerms = readStringList(
+      route.context_match,
+      `route "${routeId}" context_match`,
+      warnings,
+    );
     const phraseMatches = matchTerms
       .map((term) => findPhraseMatch(term, taskTokens))
       .filter((match): match is PhraseMatch => match !== null && !isNegatedMatch(taskTokens, match));
+    const contextMatches = contextMatchTerms
+      .map((term) => findPhraseMatch(term, taskTokens))
+      .filter((match): match is PhraseMatch => match !== null);
     const matchedTerms = phraseMatches.map((match) => match.term);
+    const contextTerms = contextMatches.map((match) => match.term);
     const matchStart = phraseMatches.reduce(
       (earliest, match) => Math.min(earliest, match.start),
       Number.POSITIVE_INFINITY,
     );
+    const contextStart = contextMatches.reduce(
+      (earliest, match) => Math.min(earliest, match.start),
+      Number.POSITIVE_INFINITY,
+    );
     const specificity = phraseMatches.reduce((highest, match) => Math.max(highest, match.tokenCount), 0);
+    const contextSpecificity = contextMatches.reduce(
+      (highest, match) => Math.max(highest, match.tokenCount),
+      0,
+    );
     const score = matchedTerms.reduce((highest, term) => Math.max(highest, scoreMatchedPhrase(term)), 0);
+    const contextScore = contextTerms.reduce(
+      (highest, term) => Math.max(highest, scoreMatchedPhrase(term)),
+      0,
+    );
 
     candidates.push({
       routeId,
       route,
       priority,
       matchedTerms,
+      contextTerms,
       matchStart,
+      contextStart,
       specificity,
+      contextSpecificity,
       score,
+      contextScore,
     });
   }
 
-  candidates.sort(
+  const actionCandidates = candidates.filter((candidate) => candidate.score > 0);
+  actionCandidates.sort(
     (left, right) =>
       left.matchStart - right.matchStart ||
       right.specificity - left.specificity ||
@@ -238,9 +269,29 @@ function selectRoute(
       left.routeId.localeCompare(right.routeId),
   );
 
-  const matched = candidates.find((candidate) => candidate.score > 0);
+  const matched = actionCandidates[0];
   if (matched) {
     return { ...matched, matchKind: "matched" };
+  }
+
+  const contextCandidates = candidates.filter((candidate) => candidate.contextScore > 0);
+  contextCandidates.sort(
+    (left, right) =>
+      left.contextStart - right.contextStart ||
+      right.contextSpecificity - left.contextSpecificity ||
+      right.priority - left.priority ||
+      right.contextScore - left.contextScore ||
+      right.contextTerms.length - left.contextTerms.length ||
+      left.routeId.localeCompare(right.routeId),
+  );
+
+  const contextual = contextCandidates[0];
+  if (contextual) {
+    return {
+      ...contextual,
+      matchedTerms: contextual.contextTerms,
+      matchKind: "matched",
+    };
   }
 
   const fallback = candidates.find((candidate) => candidate.routeId === "continue_project");
@@ -371,6 +422,12 @@ function validateSelectedRoute(route: NavigationRoute, routeId: string): string[
 
   if (route.priority !== undefined && (typeof route.priority !== "number" || !Number.isFinite(route.priority))) {
     issues.push(`Agent navigation route "${routeId}" priority must be a finite number when present.`);
+  }
+
+  if (route.context_match !== undefined && !isNonEmptyStringArray(route.context_match)) {
+    issues.push(
+      `Agent navigation route "${routeId}" context_match must be a non-empty string array when present.`,
+    );
   }
 
   for (const [fieldName, value] of [
