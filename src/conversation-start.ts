@@ -146,9 +146,7 @@ export async function buildConversationStart(
         activitySource: "conversation-start",
         ...(includeSessionProfile ? {} : { includeSessionProfile: false }),
       }),
-      task
-        ? buildAgentNavigationPlan(projectRoot, task)
-        : Promise.resolve<AgentNavigationResult>({ warnings: [] }),
+      task ? buildAgentNavigationPlan(projectRoot, task) : Promise.resolve<AgentNavigationResult>({ warnings: [] }),
     ]);
 
     return {
@@ -188,13 +186,7 @@ export function renderConversationStart(result: ConversationStartResult): string
     const sections = [result.context_markdown];
 
     if (result.warnings.length > 0) {
-      sections.push(
-        [
-          "## RepoBrain Warnings",
-          "",
-          ...result.warnings.map((warning) => `- ${warning}`),
-        ].join("\n"),
-      );
+      sections.push(["## RepoBrain Warnings", "", ...result.warnings.map((warning) => `- ${warning}`)].join("\n"));
     }
 
     if (result.navigation_plan) {
