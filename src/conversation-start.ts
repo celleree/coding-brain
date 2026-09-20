@@ -185,9 +185,23 @@ export function renderConversationStart(result: ConversationStartResult): string
   }
 
   if (result.action === "inject" && result.context_markdown) {
-    return result.navigation_plan
-      ? `${result.context_markdown}\n\n${renderAgentNavigationPlan(result.navigation_plan)}`
-      : result.context_markdown;
+    const sections = [result.context_markdown];
+
+    if (result.warnings.length > 0) {
+      sections.push(
+        [
+          "## RepoBrain Warnings",
+          "",
+          ...result.warnings.map((warning) => `- ${warning}`),
+        ].join("\n"),
+      );
+    }
+
+    if (result.navigation_plan) {
+      sections.push(renderAgentNavigationPlan(result.navigation_plan));
+    }
+
+    return sections.join("\n\n");
   }
 
   const lines = [
@@ -455,12 +469,14 @@ export function renderConversationStartPayloadJson(result: ConversationStartResu
           action: result.action,
           reason: result.reason,
           decision_trace: result.decision_trace,
+          warnings: result.warnings,
           ...(result.navigation_plan ? { navigation_plan: result.navigation_plan } : {}),
         }
       : {
           action: result.action,
           reason: result.reason,
           decision_trace: result.decision_trace,
+          warnings: result.warnings,
           ...(result.navigation_plan ? { navigation_plan: result.navigation_plan } : {}),
         },
     null,
