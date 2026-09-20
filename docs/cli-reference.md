@@ -95,8 +95,9 @@ brain diff --since 2026-04-01T00:00:00Z --format json
 
 ## Team and Integrations
 
-- `brain share <memory-id>`
-- `brain share --all-active`
+- `brain share <memory-id>`: prepare a safe explicit share bundle for one active memory, including a linked `.brain/shared/index.md`
+- `brain share --all-active`: prepare the same safe bundle for all active memories
+- `brain share --all-active --include-source-evidence`: additionally include the exact raw provenance blobs required for full verification on another checkout; review the raw evidence before committing
 - `brain mcp`
 
 ## Global Debugging
