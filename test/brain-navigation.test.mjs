@@ -18,6 +18,9 @@ it("keeps every navigation source pointed at a real repository file", async () =
 
   for (const [sourceId, source] of Object.entries(routes.sources)) {
     expect(source.path, `source ${sourceId} must define a path`).toBeTruthy();
+    if (source.optional === true) {
+      continue;
+    }
     await expect(access(path.join(projectRoot, source.path))).resolves.toBeUndefined();
   }
 });
@@ -44,4 +47,33 @@ it("keeps the cross-agent entrypoint connected to the route map and migration au
   expect(bootstrap).toContain("MIGRATION_AUDIT.md");
   expect(audit).toContain("Information discarded as unimportant");
   expect(audit).toContain("None.");
+});
+
+
+it("keeps critical existing RepoBrain guidance represented in the navigation source inventory", async () => {
+  const routes = parse(await readFile(routesPath, "utf8"));
+  const representedPaths = new Set(Object.values(routes.sources).map((source) => source.path));
+
+  for (const requiredPath of [
+    "README.md",
+    "docs/workflow-modes.md",
+    "docs/team-workflow.md",
+    ".codex/INSTALL.md",
+    ".codex/session-start-prompt.md",
+  ]) {
+    expect(representedPaths.has(requiredPath), `missing navigation source: ${requiredPath}`).toBe(true);
+  }
+});
+
+it("allows durable RepoBrain knowledge into Git while keeping local runtime state ignored", async () => {
+  const rootIgnore = await readFile(path.join(projectRoot, ".gitignore"), "utf8");
+  const brainIgnore = await readFile(path.join(projectRoot, ".brain", ".gitignore"), "utf8");
+
+  expect(rootIgnore.split(/\r?\n/).map((line) => line.trim())).not.toContain(".brain");
+  expect(brainIgnore).toContain("runtime/");
+  expect(brainIgnore).toContain("activity.json");
+  expect(brainIgnore).toContain("errors.log");
+  expect(brainIgnore).toContain("memory-index.json");
+  expect(brainIgnore).not.toContain("decisions/");
+  expect(brainIgnore).not.toContain("orchestration/");
 });
