@@ -75,14 +75,14 @@ Claude Code, Codex, Cursor, and Copilot may already have their own task or actio
 ### 1. Session Bootstrap: `start` / `route`
 
 - Input command: `brain start --format json --task "<task>"`
-- Canonical shape: JSON bundle with `context_markdown`, `skill_plan`, and the same task/path metadata used by `suggest-skills`
-- Adapter rule: prefer this in the first conversation of a session so context and routing stay in one auditable payload
+- Canonical shape: JSON bundle with `context_markdown`, `skill_plan`, optional `navigation_plan`, and the same task/path metadata used by `suggest-skills`
+- Adapter rule: prefer this in the first conversation of a session so context and routing stay in one auditable payload; when `navigation_plan` is present, consume its source paths, live checks, and next steps rather than treating it as informational only
 - Adapter example: `brain start --format json --task "debug flaky browser tests in CI"`
 
 ### 2. Fresh Conversation In The Same Session: `conversation-start`
 
 - Input command: `brain conversation-start --format json --task "<task>" --path <path>`
-- Canonical shape: JSON object with `action`, `reason`, `decision_trace`, and either a full task-routing bundle, compact `context_markdown`, or a skip result
+- Canonical shape: JSON object with `action`, `reason`, `decision_trace`, and either a full task-routing bundle, compact `context_markdown` plus optional `navigation_plan`, or a skip result
 - Adapter rule: use this when a fresh conversation starts later in the same session so RepoBrain can avoid redundant reloads while still refreshing when task scope, paths, modules, or session profile changed
 - Fallback contract: when the adapter explicitly wants only compact context, it can still consume [`contracts/session-start.inject.md`](./contracts/session-start.inject.md) via `brain inject`
 
