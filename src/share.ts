@@ -68,10 +68,7 @@ export async function writeShareIndex(projectRoot: string, plan: SharePlan): Pro
 }
 
 
-async function assertSourceEvidenceAvailable(
-  projectRoot: string,
-  records: StoredMemoryRecord[],
-): Promise<void> {
+async function assertSourceEvidenceAvailable(projectRoot: string, records: StoredMemoryRecord[]): Promise<void> {
   for (const entry of records) {
     const verification = await verifySourceEpisode(projectRoot, entry.memory.source_episode);
     if (!verification.ok) {
@@ -98,9 +95,7 @@ function createSharePlan(records: StoredMemoryRecord[], includeSourceEvidence: b
   const recordPaths = sortedRecords.map((entry) => normalizePath(entry.relativePath));
   const addPaths = dedupe([...recordPaths, normalizePath(SHARED_MEMORY_INDEX_PATH), ...sourcePaths.map(normalizePath)]);
   const warnings = includeSourceEvidence
-    ? [
-        "Raw provenance source evidence is included. Review the selected source blob contents before committing.",
-      ]
+    ? ["Raw provenance source evidence is included. Review the selected source blob contents before committing."]
     : [
         "Raw provenance source evidence is excluded by default. Repository-reading agents can use the shared index and records, but shell-based provenance verification on another checkout requires rerunning share with --include-source-evidence after reviewing the raw source material.",
       ];
