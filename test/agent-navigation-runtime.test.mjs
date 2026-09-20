@@ -116,12 +116,18 @@ it("matches the intended user-facing phrases despite inserted words and simple i
         "  repair_review_findings:",
         "    match: [fix review finding]",
         "    load: [readme]",
+        "    live_checks: [review still applies]",
+        "    then: [repair finding]",
         "  exact_head_review:",
         "    match: [review exact head]",
         "    load: [readme]",
+        "    live_checks: [exact head]",
+        "    then: [review only]",
         "  ci_failure:",
         "    match: [CI fail, build fail]",
         "    load: [readme]",
+        "    live_checks: [failing run]",
+        "    then: [inspect logs]",
       ].join("\n"),
       "utf8",
     );
@@ -168,8 +174,9 @@ it("reports malformed route fields instead of silently treating them as empty", 
     const result = await buildAgentNavigationPlan(projectRoot, "unknown work");
     const warnings = result.warnings.join("\n");
     expect(warnings).toMatch(/match must be a string array/i);
-    expect(warnings).toMatch(/live_checks must be a string array/i);
-    expect(result.plan?.match_kind).toBe("fallback");
+    expect(warnings).toMatch(/live_checks must be a non-empty string array/i);
+    expect(warnings).toMatch(/navigation plan withheld/i);
+    expect(result.plan).toBeUndefined();
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
@@ -194,6 +201,8 @@ it("tracks optional canonical sources separately when they are not shared on the
         "  continue_project:",
         "    match: [continue]",
         "    load: [memory_index, readme]",
+        "    live_checks: [current SHA]",
+        "    then: [inspect]",
       ].join("\n"),
       "utf8",
     );
@@ -331,6 +340,37 @@ it("keeps explicit implementation operations ahead of later memory-review subjec
       const result = await buildAgentNavigationPlan(projectRoot, task);
       expect(result.plan?.route_id, task).toBe("implement_feature");
     }
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+
+it("withholds the plan when a selected required source definition is invalid", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  broken:",
+        "    path: 42",
+        "routes:",
+        "  continue_project:",
+        "    match: [continue]",
+        "    load: [broken]",
+        "    live_checks: [current SHA]",
+        "    then: [inspect]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await buildAgentNavigationPlan(projectRoot, "continue");
+    expect(result.plan).toBeUndefined();
+    expect(result.warnings.join("\n")).toMatch(/invalid source/i);
+    expect(result.warnings.join("\n")).toMatch(/plan withheld/i);
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
