@@ -7,7 +7,7 @@ Cursor stays rules-first. That means the adapter is mostly workflow guidance plu
 ```text
 session start
   -> brain start --format json (via alwaysApply rule)
-  -> Cursor reads context_markdown and skill_plan
+  -> Cursor reads context_markdown, skill_plan, and navigation_plan when present
 fresh conversation later in same session
   -> brain conversation-start --format json --task "<task>" --path <path>
   -> Cursor follows RepoBrain's start / inject / skip decision
