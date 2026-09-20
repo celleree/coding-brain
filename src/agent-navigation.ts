@@ -45,6 +45,7 @@ interface RouteCandidate {
   route: NavigationRoute;
   priority: number;
   matchedTerms: string[];
+  specificity: number;
   score: number;
 }
 
@@ -191,16 +192,21 @@ function selectRoute(
     const priority = readRoutePriority(route.priority, routeId, warnings);
     const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings, true);
     const matchedTerms = matchTerms.filter((term) => phraseMatchesTask(term, taskTokens));
+    const specificity = matchedTerms.reduce(
+      (highest, term) => Math.max(highest, normalizeIntentTokens(term).length),
+      0,
+    );
     const score = matchedTerms.reduce(
       (highest, term) => Math.max(highest, scoreMatchedPhrase(term)),
       0,
     );
 
-    candidates.push({ routeId, route, priority, matchedTerms, score });
+    candidates.push({ routeId, route, priority, matchedTerms, specificity, score });
   }
 
   candidates.sort(
     (left, right) =>
+      right.specificity - left.specificity ||
       right.priority - left.priority ||
       right.score - left.score ||
       right.matchedTerms.length - left.matchedTerms.length ||
