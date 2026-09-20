@@ -334,6 +334,41 @@ await runTest("CLI share prepares a linked safe index without raw source evidenc
   }
 });
 
+
+await runTest("share rejects a tampered active memory in both safe and source-evidence modes", async () => {
+  await withTempRepo(async (projectRoot) => {
+    await saveMemory(
+      {
+        type: "decision",
+        title: "Integrity checked",
+        summary: "trusted summary",
+        detail: "## DECISION\n\ntrusted detail",
+        tags: ["share"],
+        importance: "high",
+        date: "2026-04-01T12:30:00.000Z",
+        status: "active",
+      },
+      projectRoot,
+    );
+
+    const validPlan = await buildSharePlan(projectRoot, { allActive: true });
+    const [record] = validPlan.records;
+    assert.ok(record);
+
+    const raw = await readFile(record.filePath, "utf8");
+    await writeFile(record.filePath, raw.replace("trusted summary", "tampered summary"), "utf8");
+
+    await assert.rejects(
+      () => buildSharePlan(projectRoot, { allActive: true }),
+      /record digest mismatch/i,
+    );
+    await assert.rejects(
+      () => buildSharePlan(projectRoot, { allActive: true, includeSourceEvidence: true }),
+      /record digest mismatch/i,
+    );
+  });
+});
+
 console.log("All session profile tests passed.");
 
 async function writeSessionProfile(projectRoot, data) {
