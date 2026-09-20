@@ -50,7 +50,10 @@ interface RouteCandidate {
   score: number;
 }
 
-export async function buildAgentNavigationPlan(projectRoot: string, task: string): Promise<AgentNavigationResult> {
+export async function buildAgentNavigationPlan(
+  projectRoot: string,
+  task: string,
+): Promise<AgentNavigationResult> {
   const manifestFile = path.join(projectRoot, AGENT_NAVIGATION_MANIFEST_PATH);
   let raw: string;
 
@@ -60,14 +63,18 @@ export async function buildAgentNavigationPlan(projectRoot: string, task: string
     if (isMissingFileError(error)) {
       return { warnings: [] };
     }
-    return { warnings: [`Agent navigation manifest could not be read: ${formatError(error)}`] };
+    return {
+      warnings: [`Agent navigation manifest could not be read: ${formatError(error)}`],
+    };
   }
 
   let parsed: unknown;
   try {
     parsed = parse(raw);
   } catch (error) {
-    return { warnings: [`Agent navigation manifest is invalid YAML: ${formatError(error)}`] };
+    return {
+      warnings: [`Agent navigation manifest is invalid YAML: ${formatError(error)}`],
+    };
   }
 
   if (!isRecord(parsed)) {
@@ -76,13 +83,17 @@ export async function buildAgentNavigationPlan(projectRoot: string, task: string
 
   const manifest = parsed as NavigationManifest;
   if (!isRecord(manifest.sources) || !isRecord(manifest.routes)) {
-    return { warnings: ["Agent navigation manifest must define object-valued sources and routes."] };
+    return {
+      warnings: ["Agent navigation manifest must define object-valued sources and routes."],
+    };
   }
 
   const warnings: string[] = [];
   const selected = selectRoute(manifest.routes as Record<string, unknown>, task, warnings);
   if (!selected) {
-    return { warnings: [...warnings, "Agent navigation manifest has no usable routes."] };
+    return {
+      warnings: [...warnings, "Agent navigation manifest has no usable routes."],
+    };
   }
 
   const selectedRouteIssues = validateSelectedRoute(selected.route, selected.routeId);
@@ -209,12 +220,7 @@ function selectRoute(
 
     const route = rawRoute as NavigationRoute;
     const priority = readRoutePriority(route.priority, routeId, warnings);
-    const matchTerms = readStringList(
-      route.match,
-      `route "${routeId}" match`,
-      warnings,
-      true,
-    );
+    const matchTerms = readStringList(route.match, `route "${routeId}" match`, warnings, true);
     const phraseMatches = matchTerms
       .map((term) => findPhraseMatch(term, taskTokens))
       .filter((match): match is PhraseMatch => match !== null);
@@ -348,7 +354,9 @@ function readStringList(
     return [];
   }
 
-  const invalid = value.some((entry) => typeof entry !== "string" || entry.trim().length === 0);
+  const invalid = value.some(
+    (entry) => typeof entry !== "string" || entry.trim().length === 0,
+  );
   if (invalid) {
     warnings.push(`Agent navigation ${label} contains a non-string or empty entry.`);
   }
@@ -368,7 +376,10 @@ function readStringList(
 function validateSelectedRoute(route: NavigationRoute, routeId: string): string[] {
   const issues: string[] = [];
 
-  if (route.priority !== undefined && (typeof route.priority !== "number" || !Number.isFinite(route.priority))) {
+  if (
+    route.priority !== undefined &&
+    (typeof route.priority !== "number" || !Number.isFinite(route.priority))
+  ) {
     issues.push(
       `Agent navigation route "${routeId}" priority must be a finite number when present.`,
     );
@@ -413,7 +424,9 @@ function readRoutePriority(value: unknown, routeId: string, warnings: string[]):
   }
 
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    warnings.push(`Agent navigation route "${routeId}" priority must be a finite number when present.`);
+    warnings.push(
+      `Agent navigation route "${routeId}" priority must be a finite number when present.`,
+    );
     return 0;
   }
 
@@ -426,7 +439,9 @@ function readOptionalBoolean(value: unknown, sourceId: string, warnings: string[
   }
 
   if (typeof value !== "boolean") {
-    warnings.push(`Agent navigation source "${sourceId}" optional must be a boolean when present.`);
+    warnings.push(
+      `Agent navigation source "${sourceId}" optional must be a boolean when present.`,
+    );
     return false;
   }
 
