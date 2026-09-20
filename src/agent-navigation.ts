@@ -148,6 +148,27 @@ export async function buildAgentNavigationPlan(projectRoot: string, task: string
   };
 }
 
+export function renderAgentNavigationPlan(plan: AgentNavigationPlan): string {
+  const lines = [
+    "## Repository Navigation",
+    "",
+    `- route: ${plan.route_id}`,
+    `- match: ${plan.match_kind}`,
+    `- manifest: ${plan.manifest_path}`,
+    `- sources: ${plan.source_paths.length > 0 ? plan.source_paths.join(", ") : "None."}`,
+    `- live checks: ${plan.live_checks.length > 0 ? plan.live_checks.join("; ") : "None."}`,
+    `- next steps: ${plan.next_steps.length > 0 ? plan.next_steps.join("; ") : "None."}`,
+  ];
+
+  if (plan.unavailable_optional_sources.length > 0) {
+    lines.push(
+      `- unavailable optional sources: ${plan.unavailable_optional_sources.join(", ")}`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
 function selectRoute(
   routes: Record<string, unknown>,
   task: string,
