@@ -208,7 +208,7 @@ it("tracks optional canonical sources separately when they are not shared on the
 });
 
 
-it("warns when a selected route omits live checks or next steps", async () => {
+it("withholds the navigation plan when a selected route omits required safeguards", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
 
   try {
@@ -231,9 +231,10 @@ it("warns when a selected route omits live checks or next steps", async () => {
 
     const result = await buildAgentNavigationPlan(projectRoot, "review PR #12");
     const warnings = result.warnings.join("\n");
-    expect(result.plan?.route_id).toBe("exact_head_review");
+    expect(result.plan).toBeUndefined();
     expect(warnings).toMatch(/live_checks must be a non-empty string array/i);
     expect(warnings).toMatch(/then must be a non-empty string array/i);
+    expect(warnings).toMatch(/navigation plan withheld/i);
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
@@ -285,6 +286,51 @@ it("uses route priority to keep operational intent ahead of incidental feature w
       "Fix the failing build on this feature branch.",
     );
     expect(failure.plan?.route_id).toBe("ci_failure");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+
+it("keeps explicit implementation operations ahead of later memory-review subject words", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  implement_feature:",
+        "    priority: 40",
+        "    match: [implement feature, add feature, implement]",
+        "    load: [readme]",
+        "    live_checks: [base SHA]",
+        "    then: [implement]",
+        "  memory_review:",
+        "    priority: 85",
+        "    match: [review memory, approve memory, candidate memory]",
+        "    load: [readme]",
+        "    live_checks: [candidate queue]",
+        "    then: [review candidate]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const cases = [
+      "Add a feature to approve memory candidates automatically.",
+      "Implement the memory review workflow change.",
+      "Add a feature for memory review.",
+    ];
+
+    for (const task of cases) {
+      const result = await buildAgentNavigationPlan(projectRoot, task);
+      expect(result.plan?.route_id, task).toBe("implement_feature");
+    }
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
