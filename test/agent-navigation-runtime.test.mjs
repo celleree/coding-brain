@@ -274,7 +274,7 @@ it("uses route priority to keep operational intent ahead of incidental feature w
         "    then: [do not edit]",
         "  ci_failure:",
         "    priority: 90",
-        "    match: [build fail]",
+        "    match: [build fail, failing build]",
         "    load: [readme]",
         "    live_checks: [failing run]",
         "    then: [inspect logs]",
