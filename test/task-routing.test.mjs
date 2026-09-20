@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -116,6 +116,34 @@ await runTest("task routing JSON exposes a stable expansion plan for progressive
       /^gotchas\/2026-04-03-refund-bugfixes-must-preserve-transaction-bound.*-090000000\.md$/,
     );
     assert.match(renderTaskRoutingBundleJson(bundle), /"expansion_plan": \{/);
+  });
+});
+
+await runTest("task routing carries repository navigation when configured", async () => {
+  await withTempRepo(async (projectRoot) => {
+    await initBrain(projectRoot);
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme: { path: README.md }",
+        "routes:",
+        "  exact_head_review:",
+        "    match: [review PR]",
+        "    load: [readme]",
+        "    live_checks: [exact HEAD]",
+        "    then: [do not edit]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const config = await loadConfig(projectRoot);
+    const bundle = await buildTaskRoutingBundle(projectRoot, config, { task: "review PR #12" });
+
+    assert.equal(bundle.navigation_plan?.route_id, "exact_head_review");
+    assert.deepEqual(bundle.navigation_plan?.live_checks, ["exact HEAD"]);
   });
 });
 
