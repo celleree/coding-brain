@@ -270,12 +270,14 @@ routes:
   codex_workflow:
     priority: 70
     match:
-      - use Codex
-      - run Codex
       - Codex workflow
-      - coding agent
       - model routing
       - parallel agent
+    context_match:
+      - Codex
+      - coding agent
+      - use Codex
+      - run Codex
     load:
       - memory_index
       - codex_contract
