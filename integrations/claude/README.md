@@ -7,7 +7,7 @@ Claude Code is the richest thin adapter because it can combine a skill file with
 ```text
 session start hook
   -> brain start --format json
-  -> Claude reads context_markdown and skill_plan
+  -> Claude reads context_markdown, skill_plan, and navigation_plan when present
 fresh conversation later in same session
   -> brain conversation-start --format json --task "<task>" --path <path>
   -> Claude follows RepoBrain's start / inject / skip decision
