@@ -21,7 +21,7 @@ Prefer the session-start bundle from:
 How to use it:
 
 - Use this in the first conversation of a coding session.
-- Read `context_markdown` before planning or editing.
+- Read `context_markdown` before planning or editing. Consume `navigation_plan` whenever present: load its canonical source paths, perform its live checks, and follow its next steps.
 - Treat `skill_plan` as RepoBrain's routing policy, not as an instruction to bypass Claude's native flow control.
 - Escalate when the payload shows conflicts, warnings, or missing context for the task.
 
