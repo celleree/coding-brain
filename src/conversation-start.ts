@@ -1,3 +1,8 @@
+import {
+  buildAgentNavigationPlan,
+  renderAgentNavigationPlan,
+  type AgentNavigationPlan,
+} from "./agent-navigation.js";
 import { buildInjection } from "./inject.js";
 import { loadSessionProfile, sessionProfileHasVisibleContent } from "./session-profile.js";
 import { loadActivityState } from "./store.js";
@@ -58,6 +63,7 @@ export interface ConversationStartResult {
   context_markdown?: string;
   skill_plan?: TaskRoutingBundle["skill_plan"];
   task_routing_bundle?: TaskRoutingBundle;
+  navigation_plan?: AgentNavigationPlan;
 }
 
 export async function buildConversationStart(
@@ -129,14 +135,19 @@ export async function buildConversationStart(
   }
 
   if (decision.action === "inject") {
-    const context_markdown = await buildInjection(projectRoot, config, {
-      ...(task ? { task } : {}),
-      paths,
-      modules,
-      layer: options.injectLayer ?? "summary",
-      activitySource: "conversation-start",
-      ...(includeSessionProfile ? {} : { includeSessionProfile: false }),
-    });
+    const [context_markdown, navigation] = await Promise.all([
+      buildInjection(projectRoot, config, {
+        ...(task ? { task } : {}),
+        paths,
+        modules,
+        layer: options.injectLayer ?? "summary",
+        activitySource: "conversation-start",
+        ...(includeSessionProfile ? {} : { includeSessionProfile: false }),
+      }),
+      task
+        ? buildAgentNavigationPlan(projectRoot, task)
+        : Promise.resolve({ warnings: [] }),
+    ]);
 
     return {
       contract_version: CONVERSATION_START_CONTRACT_VERSION,
@@ -146,9 +157,10 @@ export async function buildConversationStart(
       ...(task ? { task } : {}),
       paths,
       path_source,
-      warnings: [...(options.warnings ?? [])],
+      warnings: [...(options.warnings ?? []), ...navigation.warnings],
       decision_trace: decision.trace,
       context_markdown,
+      ...(navigation.plan ? { navigation_plan: navigation.plan } : {}),
     };
   }
 
@@ -171,7 +183,9 @@ export function renderConversationStart(result: ConversationStartResult): string
   }
 
   if (result.action === "inject" && result.context_markdown) {
-    return result.context_markdown;
+    return result.navigation_plan
+      ? `${result.context_markdown}\n\n${renderAgentNavigationPlan(result.navigation_plan)}`
+      : result.context_markdown;
   }
 
   const lines = [
@@ -439,11 +453,13 @@ export function renderConversationStartPayloadJson(result: ConversationStartResu
           action: result.action,
           reason: result.reason,
           decision_trace: result.decision_trace,
+          ...(result.navigation_plan ? { navigation_plan: result.navigation_plan } : {}),
         }
       : {
           action: result.action,
           reason: result.reason,
           decision_trace: result.decision_trace,
+          ...(result.navigation_plan ? { navigation_plan: result.navigation_plan } : {}),
         },
     null,
     2,
