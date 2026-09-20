@@ -252,7 +252,7 @@ await runTest("share plan includes only exact provenance blobs when explicitly r
     assert.equal(plan.includeSourceEvidence, true);
     assert.equal(plan.sourcePaths.length, 1);
     assert.match(
-      plan.sourcePaths[0].replace(/\\\\/g, "/"),
+      plan.sourcePaths[0].replace(/\\/g, "/"),
       /^\.brain\/sources\/sha256\/[a-f0-9]{2}\/[a-f0-9]{64}\.blob$/,
     );
     assert.match(joined, /sources\/sha256/);
