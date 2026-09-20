@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { sourceBlobRelativePath } from "./store/source-store.js";
+import { sourceBlobRelativePath, verifySourceEpisode } from "./store/source-store.js";
 import type { StoredMemoryRecord } from "./types.js";
 import { getMemoryStatus, loadStoredMemoryRecords } from "./store.js";
 
@@ -34,6 +34,9 @@ export async function buildSharePlan(
       throw new Error("No active memories found.");
     }
 
+    if (options.includeSourceEvidence) {
+      await assertSourceEvidenceAvailable(projectRoot, activeRecords);
+    }
     return createSharePlan(activeRecords, Boolean(options.includeSourceEvidence));
   }
 
@@ -52,6 +55,9 @@ export async function buildSharePlan(
     throw new Error([`Multiple memories matched "${memoryId}". Use a more specific id:`, ...suggestions].join("\n"));
   }
 
+  if (options.includeSourceEvidence) {
+    await assertSourceEvidenceAvailable(projectRoot, matches);
+  }
   return createSharePlan(matches, Boolean(options.includeSourceEvidence));
 }
 
@@ -59,6 +65,21 @@ export async function writeShareIndex(projectRoot: string, plan: SharePlan): Pro
   const indexPath = path.join(projectRoot, plan.sharedIndexPath);
   await mkdir(path.dirname(indexPath), { recursive: true });
   await writeFile(indexPath, plan.sharedIndexContent, "utf8");
+}
+
+
+async function assertSourceEvidenceAvailable(
+  projectRoot: string,
+  records: StoredMemoryRecord[],
+): Promise<void> {
+  for (const entry of records) {
+    const verification = await verifySourceEpisode(projectRoot, entry.memory.source_episode);
+    if (!verification.ok) {
+      throw new Error(
+        `Cannot include source evidence for "${entry.memory.title}": ${verification.reason ?? "source verification failed"}.`,
+      );
+    }
+  }
 }
 
 function createSharePlan(records: StoredMemoryRecord[], includeSourceEvidence: boolean): SharePlan {
