@@ -69,6 +69,8 @@ export {
   SUGGEST_SKILLS_CONTRACT_KIND,
   SUGGEST_SKILLS_CONTRACT_VERSION,
 } from "./suggest-skills.js";
+export { buildAgentNavigationPlan, AGENT_NAVIGATION_MANIFEST_PATH } from "./agent-navigation.js";
+export type { AgentNavigationPlan, AgentNavigationResult } from "./agent-navigation.js";
 export {
   buildTaskRoutingBundle,
   renderTaskRoutingBundle,
