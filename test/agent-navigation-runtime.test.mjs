@@ -41,6 +41,7 @@ it("selects the closest task route and resolves canonical source paths", async (
 
     expect(result.warnings).toEqual([]);
     expect(result.plan?.route_id).toBe("ci_failure");
+    expect(result.plan?.match_kind).toBe("matched");
     expect(result.plan?.matched_terms).toEqual(["CI failed"]);
     expect(result.plan?.source_paths).toEqual(["package.json"]);
     expect(result.plan?.live_checks).toEqual(["exact failing run"]);
@@ -73,8 +74,10 @@ it("falls back to continue_project for unknown intent", async () => {
     const result = await buildAgentNavigationPlan(projectRoot, "investigate a strange new concern");
 
     expect(result.plan?.route_id).toBe("continue_project");
+    expect(result.plan?.match_kind).toBe("fallback");
     expect(result.plan?.matched_terms).toEqual([]);
     expect(result.plan?.source_paths).toEqual(["README.md"]);
+    expect(result.warnings.join("\n")).toMatch(/fallback route/i);
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
@@ -86,6 +89,117 @@ it("is backward compatible when no navigation manifest exists", async () => {
   try {
     const result = await buildAgentNavigationPlan(projectRoot, "fix bug");
     expect(result).toEqual({ warnings: [] });
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+
+it("matches the intended user-facing phrases despite inserted words and simple inflection", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  continue_project:",
+        "    match: [continue]",
+        "    load: [readme]",
+        "  repair_review_findings:",
+        "    match: [fix review finding]",
+        "    load: [readme]",
+        "  exact_head_review:",
+        "    match: [review exact head]",
+        "    load: [readme]",
+        "  ci_failure:",
+        "    match: [CI fail, build fail]",
+        "    load: [readme]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const cases = [
+      ["Fix this review finding.", "repair_review_findings"],
+      ["Review this exact HEAD.", "exact_head_review"],
+      ["Why did CI fail?", "ci_failure"],
+      ["Why did the build fail?", "ci_failure"],
+    ];
+
+    for (const [task, expectedRoute] of cases) {
+      const result = await buildAgentNavigationPlan(projectRoot, task);
+      expect(result.plan?.route_id).toBe(expectedRoute);
+      expect(result.plan?.match_kind).toBe("matched");
+    }
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+it("reports malformed route fields instead of silently treating them as empty", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  continue_project:",
+        "    match: continue",
+        "    load: [readme]",
+        "    live_checks: current SHA",
+        "    then: [inspect]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await buildAgentNavigationPlan(projectRoot, "unknown work");
+    const warnings = result.warnings.join("\n");
+    expect(warnings).toMatch(/match must be a string array/i);
+    expect(warnings).toMatch(/live_checks must be a string array/i);
+    expect(result.plan?.match_kind).toBe("fallback");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+it("tracks optional canonical sources separately when they are not shared on the current surface", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  memory_index:",
+        "    path: .brain/index.md",
+        "    optional: true",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  continue_project:",
+        "    match: [continue]",
+        "    load: [memory_index, readme]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await buildAgentNavigationPlan(projectRoot, "continue");
+    expect(result.warnings).toEqual([]);
+    expect(result.plan?.source_paths).toEqual(["README.md"]);
+    expect(result.plan?.unavailable_optional_sources).toEqual([".brain/index.md"]);
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
