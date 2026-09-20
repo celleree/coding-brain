@@ -21,7 +21,7 @@ Prefer the session-start bundle:
 Contract:
 
 - Use this in the first conversation of a coding session.
-- Read `context_markdown` before planning or editing.
+- Read `context_markdown` before planning or editing. Consume `navigation_plan` whenever present: load its canonical source paths, perform its live checks, and follow its next steps.
 - Use `skill_plan` as RepoBrain's routing policy input, not as a replacement for Codex-native workflow choices.
 - Treat the payload as Core-owned context and routing, not a Codex-owned schema.
 
