@@ -108,7 +108,11 @@ it("keeps RepoBrain private by default and requires force-add for explicitly sha
 
     await writeFile(path.join(tempRoot, ".brain", "decisions", "selected.md"), "selected\n", "utf8");
     await writeFile(path.join(tempRoot, ".brain", "decisions", "candidate.md"), "candidate\n", "utf8");
-    await writeFile(path.join(tempRoot, ".brain", "sources", "sha256", "aa", "raw.blob"), "raw private input\n", "utf8");
+    await writeFile(
+      path.join(tempRoot, ".brain", "sources", "sha256", "aa", "raw.blob"),
+      "raw private input\n",
+      "utf8",
+    );
     await writeFile(path.join(tempRoot, ".brain", "routing-feedback-log.json"), "{}\n", "utf8");
     await writeFile(path.join(tempRoot, ".brain", "shared", "index.md"), "# shared\n", "utf8");
 
@@ -119,11 +123,9 @@ it("keeps RepoBrain private by default and requires force-add for explicitly sha
     expect(defaultStage.stdout).toContain(".gitignore");
     expect(defaultStage.stdout).not.toContain(".brain/");
 
-    await execFileAsync(
-      "git",
-      ["add", "-f", ".brain/decisions/selected.md", ".brain/shared/index.md"],
-      { cwd: tempRoot },
-    );
+    await execFileAsync("git", ["add", "-f", ".brain/decisions/selected.md", ".brain/shared/index.md"], {
+      cwd: tempRoot,
+    });
 
     const explicitStage = await execFileAsync("git", ["diff", "--cached", "--name-only"], { cwd: tempRoot });
     expect(explicitStage.stdout).toContain(".brain/decisions/selected.md");
