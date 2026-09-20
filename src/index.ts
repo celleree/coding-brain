@@ -17,6 +17,7 @@ import { initBrain as initBrainImpl } from "./store/core.js";
 import { loadAllPreferences as loadAllPreferencesImpl } from "./store/preference-store.js";
 import { buildSkillShortlist as buildSkillShortlistImpl } from "./suggest-skills.js";
 import { buildTaskRoutingBundle as buildTaskRoutingBundleImpl } from "./task-routing.js";
+import { buildAgentNavigationPlan as buildAgentNavigationPlanImpl } from "./agent-navigation.js";
 
 /**
  * Load and normalize RepoBrain config from `<projectRoot>/.brain/config.yaml`.
@@ -83,6 +84,9 @@ export const buildSkillShortlist = buildSkillShortlistImpl;
  * Build a combined task-routing bundle: injection context + skill routing output.
  */
 export const buildTaskRoutingBundle = buildTaskRoutingBundleImpl;
+
+/** Build a validated repository-navigation plan for a task. */
+export const buildAgentNavigationPlan = buildAgentNavigationPlanImpl;
 
 /**
  * Extract candidate durable memories from conversation/session text.
