@@ -368,3 +368,58 @@ it("withholds the plan when a selected required source definition is invalid", a
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
+
+
+it("prefers explicit actions over context-only matches and ignores negated operations", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "repobrain-nav-"));
+
+  try {
+    await mkdir(path.join(projectRoot, "docs", "brain"), { recursive: true });
+    await writeFile(path.join(projectRoot, "README.md"), "# Repo\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "docs", "brain", "ROUTES.yaml"),
+      [
+        "sources:",
+        "  readme:",
+        "    path: README.md",
+        "routes:",
+        "  implement_feature:",
+        "    priority: 40",
+        "    match: [implement feature, add feature, implement]",
+        "    load: [readme]",
+        "    live_checks: [base SHA]",
+        "    then: [implement]",
+        "  exact_head_review:",
+        "    priority: 100",
+        "    match: [review PR]",
+        "    load: [readme]",
+        "    live_checks: [exact head]",
+        "    then: [do not edit]",
+        "  codex_workflow:",
+        "    priority: 70",
+        "    match: [Codex workflow, model routing]",
+        "    context_match: [Codex, use Codex]",
+        "    load: [readme]",
+        "    live_checks: [capability]",
+        "    then: [route model]",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const cases = [
+      ["In Codex, review PR #12. Do not edit.", "exact_head_review"],
+      ["Use Codex to review PR #12 without editing.", "exact_head_review"],
+      ["Do not implement a feature. Review PR #12 without editing.", "exact_head_review"],
+      ["Codex", "codex_workflow"],
+      ["Which Codex workflow should I use?", "codex_workflow"],
+    ];
+
+    for (const [task, expectedRoute] of cases) {
+      const result = await buildAgentNavigationPlan(projectRoot, task);
+      expect(result.plan?.route_id, task).toBe(expectedRoute);
+      expect(result.plan?.match_kind, task).toBe("matched");
+    }
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
