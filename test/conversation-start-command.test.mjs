@@ -110,7 +110,6 @@ await runTest("conversation-start refreshes compact context when the session pro
   });
 });
 
-
 await runTest("conversation-start inject surfaces navigation warnings in JSON and markdown", async () => {
   await withTempRepo(async (projectRoot) => {
     const first = await runCliProcess(
