@@ -1,5 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { open, readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   ORCHESTRATOR_PHASE_BOUNDARY_SIGNALS,
@@ -23,6 +24,10 @@ import {
 export const ORCHESTRATOR_RUNTIME_HEALTH_CONTRACT_VERSION = "repobrain.orchestrator-runtime-health.v1" as const;
 export const ORCHESTRATOR_RUNTIME_HEALTH_KIND = "repobrain.orchestrator_runtime_health" as const;
 export const ORCHESTRATOR_RUNTIME_HEALTH_FILENAME = "orchestrator-health.json" as const;
+
+const ORCHESTRATOR_RUNTIME_HEALTH_LOCK_FILENAME = `${ORCHESTRATOR_RUNTIME_HEALTH_FILENAME}.lock`;
+const ORCHESTRATOR_RUNTIME_HEALTH_LOCK_RETRY_DELAY_MS = 10;
+const ORCHESTRATOR_RUNTIME_HEALTH_LOCK_MAX_ATTEMPTS = 500;
 
 export const MEANINGFUL_ORCHESTRATION_CYCLE_DEFINITION =
   "A completed orchestration operation that materially advances or re-evaluates project execution after authoritative state/dependencies are considered." as const;
@@ -80,28 +85,63 @@ export async function mutateOrchestratorRuntimeHealth(
   projectRoot: string,
   mutation: OrchestratorRuntimeHealthMutation,
 ): Promise<OrchestratorRuntimeHealth> {
-  const binding = await requireActiveBinding(projectRoot);
   const checkedMutation = validateRuntimeMutation(mutation);
+  return withOrchestratorRuntimeHealthMutationLock(projectRoot, async () => {
+    const binding = await requireActiveBinding(projectRoot);
+    const current = await readBoundRuntimeHealth(projectRoot, binding);
+    const next: OrchestratorRuntimeHealth = {
+      ...current.health,
+      signals: applyMutation(current.health.signals, checkedMutation),
+    };
+    const targetPath = getOrchestratorRuntimeHealthPath(projectRoot);
+    const content = serializeRuntimeHealth(next);
+    const operation =
+      current.raw === null
+        ? createAtomicWriteOperation(targetPath, content, { targetMustNotExist: true })
+        : createAtomicWriteOperation(targetPath, content, { expectedContent: current.raw });
+
+    const durableCurrentPrecondition = createAtomicContentPreconditionOperation(
+      binding.durableCurrentPath,
+      binding.durableCurrentContent,
+    );
+    await commitAtomicWriteOperations([operation, durableCurrentPrecondition]);
+    return next;
+  });
+}
+
+async function withOrchestratorRuntimeHealthMutationLock<T>(
+  projectRoot: string,
+  action: () => Promise<T>,
+): Promise<T> {
   await ensureSessionRuntimeLayout(projectRoot);
+  const lockPath = path.join(getRuntimeDir(projectRoot), ORCHESTRATOR_RUNTIME_HEALTH_LOCK_FILENAME);
+  let lockHandle: Awaited<ReturnType<typeof open>> | undefined;
 
-  const current = await readBoundRuntimeHealth(projectRoot, binding);
-  const next: OrchestratorRuntimeHealth = {
-    ...current.health,
-    signals: applyMutation(current.health.signals, checkedMutation),
-  };
-  const targetPath = getOrchestratorRuntimeHealthPath(projectRoot);
-  const content = serializeRuntimeHealth(next);
-  const operation =
-    current.raw === null
-      ? createAtomicWriteOperation(targetPath, content, { targetMustNotExist: true })
-      : createAtomicWriteOperation(targetPath, content, { expectedContent: current.raw });
+  for (let attempt = 0; attempt < ORCHESTRATOR_RUNTIME_HEALTH_LOCK_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      lockHandle = await open(lockPath, "wx");
+      break;
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) {
+        throw error;
+      }
+      if (attempt === ORCHESTRATOR_RUNTIME_HEALTH_LOCK_MAX_ATTEMPTS - 1) {
+        fail("timed out waiting for another runtime health mutation to finish");
+      }
+      await delay(ORCHESTRATOR_RUNTIME_HEALTH_LOCK_RETRY_DELAY_MS);
+    }
+  }
 
-  const durableCurrentPrecondition = createAtomicContentPreconditionOperation(
-    binding.durableCurrentPath,
-    binding.durableCurrentContent,
-  );
-  await commitAtomicWriteOperations([operation, durableCurrentPrecondition]);
-  return next;
+  if (lockHandle === undefined) {
+    fail("could not acquire the runtime health mutation lock");
+  }
+
+  try {
+    return await action();
+  } finally {
+    await lockHandle.close();
+    await rm(lockPath, { force: true });
+  }
 }
 
 async function requireActiveBinding(projectRoot: string): Promise<ActiveBinding> {
@@ -323,6 +363,10 @@ function requireNonEmptyString(value: unknown, field: string): string {
 
 function isMissingFileError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "EEXIST";
 }
 
 function fail(message: string): never {
