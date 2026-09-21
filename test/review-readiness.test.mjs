@@ -75,14 +75,15 @@ describe("exact-HEAD review safety", () => {
   it("requires an explicit current-HEAD approval for completion", async () => {
     const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
     expect(workflow).toContain("/reviews?per_page=100");
-    expect(workflow).toContain('.commit_id == $head and .state == "APPROVED"');
+    expect(workflow).toContain("[ .[] | select(.commit_id == $head) ] | group_by(.user.id) | map(max_by(.id))");
+    expect(workflow).toContain('.state == "APPROVED"');
     expect(workflow).toContain('throw new Error("exact-HEAD review approval is missing")');
     expect(workflow).toContain("evaluateExactHeadReviewResult");
   });
 
   it("does not let stale or blocking review state become completion PASS", async () => {
     const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
-    expect(workflow).toContain('.commit_id == $head and .state == "CHANGES_REQUESTED"');
+    expect(workflow).toContain('.state == "CHANGES_REQUESTED"');
     expect(workflow).toContain('throw new Error("review changes requested")');
     expect(workflow).toContain("types: [submitted, dismissed]");
   });
