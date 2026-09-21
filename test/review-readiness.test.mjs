@@ -99,7 +99,9 @@ describe("exact-HEAD review readiness", () => {
   });
 
   it("fails closed for malformed exact-HEAD review results", () => {
-    expect(evaluateExactHeadReviewResult({ reviewed_sha: SHA_A, outcome: "PASS" }, SHA_A).state).toBe("INVALID");
+    expect(evaluateExactHeadReviewResult({ reviewed_sha: SHA_A, outcome: "PASS" }, SHA_A).state).toBe(
+      "INVALID",
+    );
     expect(
       evaluateExactHeadReviewResult(
         {
