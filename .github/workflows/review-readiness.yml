@@ -65,11 +65,16 @@ jobs:
           LIVE_REVIEWS="$(curl --fail --silent --show-error             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "$GH_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100")"
           export PR_BODY="$(jq -r '.body // ""' <<<"$LIVE_PR")"
           export PR_HEAD_SHA="$(jq -r '.head.sha // ""' <<<"$LIVE_PR")"
-          LATEST_REVIEWS="$(jq -c --arg head "$PR_HEAD_SHA" '
-            [ .[] | select(.commit_id == $head) ] | group_by(.user.id) | map(max_by(.id))
+          EFFECTIVE_REVIEWS="$(jq -c --arg head "$PR_HEAD_SHA" '
+            [ .[] | select(.commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")) ]
+            | group_by(.user.id) | map(max_by(.id))
           ' <<<"$LIVE_REVIEWS")"
-          export CURRENT_APPROVAL_SHA="$(jq -r '[ .[] | select(.state == "APPROVED") ] | last | .commit_id // ""' <<<"$LATEST_REVIEWS")"
-          export CURRENT_CHANGES_REQUESTED="$(jq -r 'any(.[]; .state == "CHANGES_REQUESTED")' <<<"$LATEST_REVIEWS")"
+          export CURRENT_CHANGES_REQUESTED="$(jq -r 'any(.[]; .state == "CHANGES_REQUESTED")' <<<"$EFFECTIVE_REVIEWS")"
+          export CURRENT_APPROVAL_SHA=""
+          while read -r reviewer; do
+            permission="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$GH_API_URL/repos/$REPOSITORY/collaborators/$reviewer/permission" | jq -r '.permission // "none"')"
+            if [[ "$permission" == "write" || "$permission" == "admin" ]]; then export CURRENT_APPROVAL_SHA="$PR_HEAD_SHA"; break; fi
+          done < <(jq -r '.[] | select(.state == "APPROVED") | .user.login' <<<"$EFFECTIVE_REVIEWS")
 
           node --input-type=module <<'NODE'
           import {
