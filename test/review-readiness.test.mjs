@@ -72,10 +72,8 @@ describe("exact-HEAD review readiness", () => {
     expect(evaluateReviewReadinessText(readinessBlock("REVIEW_READY", SHA_A), SHA_A).state).toBe("READY");
     expect(evaluateReviewReadinessText("no readiness declaration", SHA_A).state).toBe("INVALID");
     expect(
-      evaluateReviewReadinessText(
-        readinessBlock("IN_PROGRESS") + "\n" + readinessBlock("REVIEW_READY", SHA_A),
-        SHA_A,
-      ).state,
+      evaluateReviewReadinessText(readinessBlock("IN_PROGRESS") + "\n" + readinessBlock("REVIEW_READY", SHA_A), SHA_A)
+        .state,
     ).toBe("INVALID");
   });
 
@@ -99,9 +97,7 @@ describe("exact-HEAD review readiness", () => {
   });
 
   it("fails closed for malformed exact-HEAD review results", () => {
-    expect(evaluateExactHeadReviewResult({ reviewed_sha: SHA_A, outcome: "PASS" }, SHA_A).state).toBe(
-      "INVALID",
-    );
+    expect(evaluateExactHeadReviewResult({ reviewed_sha: SHA_A, outcome: "PASS" }, SHA_A).state).toBe("INVALID");
     expect(
       evaluateExactHeadReviewResult(
         {
