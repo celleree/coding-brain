@@ -164,10 +164,6 @@ const REVIEW_READINESS_BLOCK_START = "<!-- repobrain-review-readiness";
 const REVIEW_READINESS_BLOCK_END = "-->";
 const EXACT_GIT_SHA = /^[0-9a-f]{40}$/i;
 
-/**
- * Provider-neutral readiness evaluator. Callers supply the observed current HEAD;
- * core lifecycle logic does not fetch provider state.
- */
 export function evaluateReviewReadiness(declaration: unknown, currentHeadSha: unknown): ReviewReadinessEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
@@ -222,10 +218,6 @@ export function evaluateReviewReadiness(declaration: unknown, currentHeadSha: un
   };
 }
 
-/**
- * Parse the reusable readiness block used by provider adapters such as GitHub PR checks.
- * Missing, duplicate, or malformed fields fail closed as INVALID.
- */
 export function evaluateReviewReadinessText(source: unknown, currentHeadSha: unknown): ReviewReadinessEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
@@ -273,10 +265,6 @@ export function evaluateReviewReadinessText(source: unknown, currentHeadSha: unk
   return evaluateReviewReadiness(declaration, currentHead);
 }
 
-/**
- * A review result is only current for the exact live SHA it reviewed.
- * A later commit makes the prior result stale rather than transferable.
- */
 export function evaluateExactHeadReviewResult(result: unknown, currentHeadSha: unknown): ExactHeadReviewEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
