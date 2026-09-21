@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-
 import {
   REVIEW_READINESS_CONTRACT_VERSION,
   evaluateExactHeadReviewResult,
@@ -8,119 +7,83 @@ import {
   evaluateReviewReadinessText,
 } from "../dist/index.js";
 
-const SHA_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const SHA_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-
-function declaration(status, reviewSha) {
-  return {
-    contract_version: REVIEW_READINESS_CONTRACT_VERSION,
-    status,
-    ...(reviewSha === undefined ? {} : { review_sha: reviewSha }),
-  };
-}
-
-function readinessBlock(status, reviewSha) {
-  return [
+const A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const declaration = (status, review_sha) => ({
+  contract_version: REVIEW_READINESS_CONTRACT_VERSION,
+  status,
+  ...(review_sha ? { review_sha } : {}),
+});
+const block = (status, sha) =>
+  [
     "<!-- repobrain-review-readiness",
     `CONTRACT_VERSION: ${REVIEW_READINESS_CONTRACT_VERSION}`,
     `STATUS: ${status}`,
-    ...(reviewSha === undefined ? [] : [`REVIEW_SHA: ${reviewSha}`]),
+    ...(sha ? [`REVIEW_SHA: ${sha}`] : []),
     "-->",
   ].join("\n");
-}
 
-describe("exact-HEAD review readiness", () => {
-  it("does not allow review while implementation is in progress", () => {
-    expect(evaluateReviewReadiness(declaration("IN_PROGRESS"), SHA_A)).toMatchObject({
-      state: "NOT_READY",
-      current_head_sha: SHA_A,
-    });
-  });
-
-  it("allows REVIEW_READY only when the declared SHA equals current HEAD", () => {
-    expect(evaluateReviewReadiness(declaration("REVIEW_READY", SHA_A), SHA_A)).toEqual({
-      state: "READY",
-      current_head_sha: SHA_A,
-      declared_review_sha: SHA_A,
-      reason: "declared review SHA matches current HEAD",
-    });
-  });
-
-  it("invalidates readiness deterministically when HEAD moves", () => {
-    expect(evaluateReviewReadiness(declaration("REVIEW_READY", SHA_A), SHA_B)).toEqual({
+describe("exact-HEAD review safety", () => {
+  it("enforces readiness against the current exact HEAD", () => {
+    expect(evaluateReviewReadiness(declaration("IN_PROGRESS"), A).state).toBe("NOT_READY");
+    expect(evaluateReviewReadiness(declaration("REVIEW_READY", A), A).state).toBe("READY");
+    expect(evaluateReviewReadiness(declaration("REVIEW_READY", A), B)).toMatchObject({
       state: "STALE",
-      current_head_sha: SHA_B,
-      declared_review_sha: SHA_A,
       reason: "STALE — HEAD MOVED",
     });
+    expect(evaluateReviewReadiness(declaration("REVIEW_READY", B), B).state).toBe("READY");
   });
 
-  it("restores readiness only after the new HEAD is explicitly re-declared", () => {
-    expect(evaluateReviewReadiness(declaration("REVIEW_READY", SHA_A), SHA_B).state).toBe("STALE");
-    expect(evaluateReviewReadiness(declaration("REVIEW_READY", SHA_B), SHA_B).state).toBe("READY");
-  });
-
-  it("fails closed for missing or malformed readiness data", () => {
-    expect(evaluateReviewReadiness(undefined, SHA_A).state).toBe("INVALID");
-    expect(evaluateReviewReadiness(declaration("REVIEW_READY"), SHA_A).state).toBe("INVALID");
-    expect(evaluateReviewReadiness(declaration("IN_PROGRESS", SHA_A), SHA_A).state).toBe("INVALID");
-    expect(evaluateReviewReadiness({ ...declaration("REVIEW_READY", SHA_A), extra: true }, SHA_A).state).toBe(
+  it("fails closed for malformed or ambiguous readiness data", () => {
+    expect(evaluateReviewReadiness(undefined, A).state).toBe("INVALID");
+    expect(evaluateReviewReadiness(declaration("REVIEW_READY"), A).state).toBe("INVALID");
+    expect(evaluateReviewReadiness(declaration("IN_PROGRESS", A), A).state).toBe("INVALID");
+    expect(evaluateReviewReadinessText(block("IN_PROGRESS") + "\n" + block("REVIEW_READY", A), A).state).toBe(
       "INVALID",
     );
   });
 
-  it("parses one versioned provider-neutral readiness block and rejects ambiguous blocks", () => {
-    expect(evaluateReviewReadinessText(readinessBlock("REVIEW_READY", SHA_A), SHA_A).state).toBe("READY");
-    expect(evaluateReviewReadinessText("no readiness declaration", SHA_A).state).toBe("INVALID");
-    expect(
-      evaluateReviewReadinessText(readinessBlock("IN_PROGRESS") + "\n" + readinessBlock("REVIEW_READY", SHA_A), SHA_A)
-        .state,
-    ).toBe("INVALID");
-  });
-
-  it("binds an exact-HEAD review result to only the SHA that was reviewed", () => {
-    const result = {
+  it("binds review completion to one exact SHA", () => {
+    const review = {
       contract_version: REVIEW_READINESS_CONTRACT_VERSION,
-      reviewed_sha: SHA_A,
+      reviewed_sha: A,
       outcome: "PASS",
     };
-
-    expect(evaluateExactHeadReviewResult(result, SHA_A)).toMatchObject({
-      state: "CURRENT",
-      reviewed_sha: SHA_A,
-    });
-    expect(evaluateExactHeadReviewResult(result, SHA_B)).toEqual({
+    expect(evaluateExactHeadReviewResult(review, A).state).toBe("CURRENT");
+    expect(evaluateExactHeadReviewResult(review, B)).toMatchObject({
       state: "STALE",
-      current_head_sha: SHA_B,
-      reviewed_sha: SHA_A,
       reason: "STALE — HEAD MOVED",
     });
+    expect(evaluateExactHeadReviewResult({ reviewed_sha: A, outcome: "PASS" }, A).state).toBe("INVALID");
   });
 
-  it("keeps GitHub adapter live-state authoritative and PR-scoped", async () => {
+  it("keeps readiness and completion as distinct GitHub check contexts", async () => {
     const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
-
+    expect(workflow).toContain("readiness:");
+    expect(workflow).toContain("review-completion:");
     expect(workflow).toContain("group: review-safety-${{ github.event.pull_request.number }}");
     expect(workflow).toContain("cancel-in-progress: true");
+  });
+
+  it("uses live PR state instead of event body/head snapshots", async () => {
+    const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
     expect(workflow).toContain("$GH_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER");
     expect(workflow).not.toContain("github.event.pull_request.body");
     expect(workflow).not.toContain("github.event.pull_request.head.sha");
-    expect(workflow).toContain("pull_request_review:");
-    expect(workflow).toContain("github.event.review.commit_id");
+  });
+
+  it("requires an explicit current-HEAD approval for completion", async () => {
+    const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
+    expect(workflow).toContain("/reviews?per_page=100");
+    expect(workflow).toContain('.commit_id == $head and .state == "APPROVED"');
+    expect(workflow).toContain('throw new Error("exact-HEAD review approval is missing")');
     expect(workflow).toContain("evaluateExactHeadReviewResult");
   });
 
-  it("fails closed for malformed exact-HEAD review results", () => {
-    expect(evaluateExactHeadReviewResult({ reviewed_sha: SHA_A, outcome: "PASS" }, SHA_A).state).toBe("INVALID");
-    expect(
-      evaluateExactHeadReviewResult(
-        {
-          contract_version: REVIEW_READINESS_CONTRACT_VERSION,
-          reviewed_sha: "short",
-          outcome: "PASS",
-        },
-        SHA_A,
-      ).state,
-    ).toBe("INVALID");
+  it("does not let stale or blocking review state become completion PASS", async () => {
+    const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
+    expect(workflow).toContain('.commit_id == $head and .state == "CHANGES_REQUESTED"');
+    expect(workflow).toContain('throw new Error("review changes requested")');
+    expect(workflow).toContain("types: [submitted, dismissed]");
   });
 });
