@@ -3,40 +3,63 @@ name: Review readiness
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: review-safety-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  readiness:
+  validate:
+    if: github.event_name == 'pull_request' || github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build review-readiness validator
-        run: npm run build
-
-      - name: Validate declared review candidate
+      - run: npm ci
+      - run: npm run build
+      - name: Validate live review state
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          REVIEWED_SHA: ${{ github.event.review.commit_id }}
         run: |
+          LIVE_PR="$(curl --fail --silent --show-error             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "$GH_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          export PR_BODY="$(jq -r '.body // ""' <<<"$LIVE_PR")"
+          export PR_HEAD_SHA="$(jq -r '.head.sha // ""' <<<"$LIVE_PR")"
+
           node --input-type=module <<'NODE'
-          import { evaluateReviewReadinessText } from "./dist/index.js";
+          import {
+            REVIEW_READINESS_CONTRACT_VERSION,
+            evaluateExactHeadReviewResult,
+            evaluateReviewReadinessText,
+          } from "./dist/index.js";
 
-          const result = evaluateReviewReadinessText(process.env.PR_BODY ?? "", process.env.PR_HEAD_SHA ?? "");
-          console.log(JSON.stringify(result, null, 2));
+          const readiness = evaluateReviewReadinessText(process.env.PR_BODY ?? "", process.env.PR_HEAD_SHA ?? "");
+          console.log(JSON.stringify({ readiness }, null, 2));
+          if (readiness.state !== "READY") throw new Error(readiness.reason);
 
-          if (result.state !== "READY") {
-            throw new Error(result.reason);
+          if (process.env.EVENT_NAME === "pull_request_review") {
+            const review = evaluateExactHeadReviewResult(
+              {
+                contract_version: REVIEW_READINESS_CONTRACT_VERSION,
+                reviewed_sha: process.env.REVIEWED_SHA,
+                outcome: "PASS",
+              },
+              process.env.PR_HEAD_SHA,
+            );
+            console.log(JSON.stringify({ review }, null, 2));
+            if (review.state !== "CURRENT") throw new Error(review.reason);
           }
           NODE
