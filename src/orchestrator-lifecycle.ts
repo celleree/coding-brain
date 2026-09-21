@@ -122,7 +122,6 @@ export interface OrchestratorCheckpoint {
   last_observed_repository_state?: OrchestratorRepositoryObservation;
 }
 
-
 export const REVIEW_READINESS_CONTRACT_VERSION = "repobrain.review-readiness.v1" as const;
 export const REVIEW_WORKFLOW_STATUSES = ["IN_PROGRESS", "REVIEW_READY"] as const;
 export type ReviewWorkflowStatus = (typeof REVIEW_WORKFLOW_STATUSES)[number];
@@ -169,10 +168,7 @@ const EXACT_GIT_SHA = /^[0-9a-f]{40}$/i;
  * Provider-neutral readiness evaluator. Callers supply the observed current HEAD;
  * core lifecycle logic does not fetch provider state.
  */
-export function evaluateReviewReadiness(
-  declaration: unknown,
-  currentHeadSha: unknown,
-): ReviewReadinessEvaluation {
+export function evaluateReviewReadiness(declaration: unknown, currentHeadSha: unknown): ReviewReadinessEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
     return { state: "INVALID", reason: "current HEAD SHA must be a full 40-character Git SHA" };
@@ -230,10 +226,7 @@ export function evaluateReviewReadiness(
  * Parse the reusable readiness block used by provider adapters such as GitHub PR checks.
  * Missing, duplicate, or malformed fields fail closed as INVALID.
  */
-export function evaluateReviewReadinessText(
-  source: unknown,
-  currentHeadSha: unknown,
-): ReviewReadinessEvaluation {
+export function evaluateReviewReadinessText(source: unknown, currentHeadSha: unknown): ReviewReadinessEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
     return { state: "INVALID", reason: "current HEAD SHA must be a full 40-character Git SHA" };
@@ -246,9 +239,7 @@ export function evaluateReviewReadinessText(
   if (start < 0) {
     return invalidReadiness(currentHead, "review-readiness block is missing");
   }
-  if (
-    source.indexOf(REVIEW_READINESS_BLOCK_START, start + REVIEW_READINESS_BLOCK_START.length) >= 0
-  ) {
+  if (source.indexOf(REVIEW_READINESS_BLOCK_START, start + REVIEW_READINESS_BLOCK_START.length) >= 0) {
     return invalidReadiness(currentHead, "multiple review-readiness blocks are not allowed");
   }
   const bodyStart = start + REVIEW_READINESS_BLOCK_START.length;
@@ -286,10 +277,7 @@ export function evaluateReviewReadinessText(
  * A review result is only current for the exact live SHA it reviewed.
  * A later commit makes the prior result stale rather than transferable.
  */
-export function evaluateExactHeadReviewResult(
-  result: unknown,
-  currentHeadSha: unknown,
-): ExactHeadReviewEvaluation {
+export function evaluateExactHeadReviewResult(result: unknown, currentHeadSha: unknown): ExactHeadReviewEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
     return { state: "INVALID", reason: "current HEAD SHA must be a full 40-character Git SHA" };
