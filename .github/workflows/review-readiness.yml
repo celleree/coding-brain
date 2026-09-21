@@ -1,0 +1,42 @@
+name: Review readiness
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build review-readiness validator
+        run: npm run build
+
+      - name: Validate declared review candidate
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { evaluateReviewReadinessText } from "./dist/index.js";
+
+          const result = evaluateReviewReadinessText(process.env.PR_BODY ?? "", process.env.PR_HEAD_SHA ?? "");
+          console.log(JSON.stringify(result, null, 2));
+
+          if (result.state !== "READY") {
+            throw new Error(result.reason);
+          }
+          NODE
