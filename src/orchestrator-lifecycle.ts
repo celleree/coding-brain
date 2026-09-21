@@ -199,7 +199,11 @@ export function evaluateReviewReadiness(
     if (declaration.review_sha !== undefined) {
       return invalidReadiness(currentHead, "IN_PROGRESS must not retain a declared review SHA");
     }
-    return { state: "NOT_READY", current_head_sha: currentHead, reason: "implementation is still in progress" };
+    return {
+      state: "NOT_READY",
+      current_head_sha: currentHead,
+      reason: "implementation is still in progress",
+    };
   }
 
   const declaredSha = normalizeGitSha(declaration.review_sha);
@@ -226,7 +230,10 @@ export function evaluateReviewReadiness(
  * Parse the reusable readiness block used by provider adapters such as GitHub PR checks.
  * Missing, duplicate, or malformed fields fail closed as INVALID.
  */
-export function evaluateReviewReadinessText(source: unknown, currentHeadSha: unknown): ReviewReadinessEvaluation {
+export function evaluateReviewReadinessText(
+  source: unknown,
+  currentHeadSha: unknown,
+): ReviewReadinessEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
     return { state: "INVALID", reason: "current HEAD SHA must be a full 40-character Git SHA" };
@@ -239,7 +246,9 @@ export function evaluateReviewReadinessText(source: unknown, currentHeadSha: unk
   if (start < 0) {
     return invalidReadiness(currentHead, "review-readiness block is missing");
   }
-  if (source.indexOf(REVIEW_READINESS_BLOCK_START, start + REVIEW_READINESS_BLOCK_START.length) >= 0) {
+  if (
+    source.indexOf(REVIEW_READINESS_BLOCK_START, start + REVIEW_READINESS_BLOCK_START.length) >= 0
+  ) {
     return invalidReadiness(currentHead, "multiple review-readiness blocks are not allowed");
   }
   const bodyStart = start + REVIEW_READINESS_BLOCK_START.length;
@@ -277,17 +286,28 @@ export function evaluateReviewReadinessText(source: unknown, currentHeadSha: unk
  * A review result is only current for the exact live SHA it reviewed.
  * A later commit makes the prior result stale rather than transferable.
  */
-export function evaluateExactHeadReviewResult(result: unknown, currentHeadSha: unknown): ExactHeadReviewEvaluation {
+export function evaluateExactHeadReviewResult(
+  result: unknown,
+  currentHeadSha: unknown,
+): ExactHeadReviewEvaluation {
   const currentHead = normalizeGitSha(currentHeadSha);
   if (currentHead === null) {
     return { state: "INVALID", reason: "current HEAD SHA must be a full 40-character Git SHA" };
   }
   if (!isRecord(result)) {
-    return { state: "INVALID", current_head_sha: currentHead, reason: "exact-HEAD review result is missing or malformed" };
+    return {
+      state: "INVALID",
+      current_head_sha: currentHead,
+      reason: "exact-HEAD review result is missing or malformed",
+    };
   }
   const keys = Object.keys(result);
   if (keys.some((key) => !["contract_version", "reviewed_sha", "outcome"].includes(key))) {
-    return { state: "INVALID", current_head_sha: currentHead, reason: "exact-HEAD review result contains unsupported fields" };
+    return {
+      state: "INVALID",
+      current_head_sha: currentHead,
+      reason: "exact-HEAD review result contains unsupported fields",
+    };
   }
   const reviewedSha = normalizeGitSha(result.reviewed_sha);
   if (
@@ -296,10 +316,19 @@ export function evaluateExactHeadReviewResult(result: unknown, currentHeadSha: u
     typeof result.outcome !== "string" ||
     !EXACT_HEAD_REVIEW_OUTCOMES.includes(result.outcome as ExactHeadReviewOutcome)
   ) {
-    return { state: "INVALID", current_head_sha: currentHead, reason: "exact-HEAD review result is invalid" };
+    return {
+      state: "INVALID",
+      current_head_sha: currentHead,
+      reason: "exact-HEAD review result is invalid",
+    };
   }
   if (reviewedSha !== currentHead) {
-    return { state: "STALE", current_head_sha: currentHead, reviewed_sha: reviewedSha, reason: "STALE — HEAD MOVED" };
+    return {
+      state: "STALE",
+      current_head_sha: currentHead,
+      reviewed_sha: reviewedSha,
+      reason: "STALE — HEAD MOVED",
+    };
   }
   return {
     state: "CURRENT",
