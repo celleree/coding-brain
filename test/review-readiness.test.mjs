@@ -79,6 +79,7 @@ describe("exact-HEAD review safety", () => {
     expect(workflow).toContain("group_by(.user.id) | map(max_by(.id))");
     expect(workflow).toContain("/collaborators/$reviewer/permission");
     expect(workflow).toContain('permission" == "write" || "$permission" == "admin"');
+    expect(workflow).toContain('[[ "$state" == "CHANGES_REQUESTED" ]] && export CURRENT_CHANGES_REQUESTED=true');
     expect(workflow).toContain('throw new Error("exact-HEAD review approval is missing")');
     expect(workflow).toContain("evaluateExactHeadReviewResult");
   });
