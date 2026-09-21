@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -94,6 +95,19 @@ describe("exact-HEAD review readiness", () => {
       reviewed_sha: SHA_A,
       reason: "STALE — HEAD MOVED",
     });
+  });
+
+  it("keeps GitHub adapter live-state authoritative and PR-scoped", async () => {
+    const workflow = await readFile(".github/workflows/review-readiness.yml", "utf8");
+
+    expect(workflow).toContain("group: review-safety-${{ github.event.pull_request.number }}");
+    expect(workflow).toContain("cancel-in-progress: true");
+    expect(workflow).toContain("$GH_API_URL/repos/$REPOSITORY/pulls/$PR_NUMBER");
+    expect(workflow).not.toContain("github.event.pull_request.body");
+    expect(workflow).not.toContain("github.event.pull_request.head.sha");
+    expect(workflow).toContain("pull_request_review:");
+    expect(workflow).toContain("github.event.review.commit_id");
+    expect(workflow).toContain("evaluateExactHeadReviewResult");
   });
 
   it("fails closed for malformed exact-HEAD review results", () => {
