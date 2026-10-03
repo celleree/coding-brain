@@ -1,0 +1,134 @@
+{
+  "schema_version": "laya-integration-readiness.v1",
+  "contract_ready": true,
+  "global_contract_enabled": false,
+  "laya_replacement_ready": false,
+  "provenance": {
+    "contract_version": "2.2",
+    "source_repository": "celleree/laya-eval",
+    "source_commit": "cac2aac10c365baf584f32712a34f1eb5e6ef284",
+    "rubric_path": "docs/SEMANTIC_ANNOTATION_RUBRIC_V2_2.md",
+    "rubric_sha256": "3acd87e1f8f08196ca48979467b818ad104a7213dbd2b1def524dbac20f17708",
+    "routing_source_path": "dataset_pipeline/core.py",
+    "routing_source_sha256": "81ff5bd5b5111470d9e046e42b98975f91dfe040710378c124db1d59a5649d3a",
+    "freeze_artifact_path": "results/semantic_contract_v2_2_freeze.json"
+  },
+  "conformance": {
+    "state_count": 2592,
+    "sha256": "1bfb950e7b759ef3eed3c026657092d636574e86e22fe3c9ce3ff0f12cccd9b8",
+    "serialization": "Cartesian product in SEMANTIC_DIMENSIONS declaration/value order, last dimension fastest; each UTF-8 row: eight values joined by |, then |route and LF.",
+    "origin": "Executed unchanged DIMENSIONS, validate_labels and route AST nodes from pinned Python source; reproduction command in test/semantic-routing-contract.test.mjs. CI requires no Laya checkout."
+  },
+  "requirements": [
+    {
+      "id": "frozen_v2_2_contract",
+      "status": "ready",
+      "evidence": "Pinned Laya freeze artifact identifies V2.2 and rubric hash."
+    },
+    {
+      "id": "pinned_laya_provenance",
+      "status": "ready",
+      "evidence": "src/semantic-routing-contract.ts: SEMANTIC_CONTRACT_PROVENANCE"
+    },
+    {
+      "id": "eight_dimension_contract",
+      "status": "ready",
+      "evidence": "src/semantic-routing-contract.ts: SEMANTIC_DIMENSIONS"
+    },
+    {
+      "id": "deterministic_route_parity",
+      "status": "ready",
+      "evidence": "test/semantic-routing-contract.test.mjs: Python-derived oracle and boundary tests"
+    },
+    {
+      "id": "exhaustive_conformance",
+      "status": "ready",
+      "evidence": "test/semantic-routing-contract.test.mjs: 2,592-state digest"
+    },
+    {
+      "id": "classifier_neutral_input",
+      "status": "ready",
+      "evidence": "src/semantic-routing-contract.ts: validateSemanticLabels(unknown); no classifier dependency"
+    },
+    {
+      "id": "runtime_question_alignment",
+      "status": "not_started",
+      "evidence": "Current runtime questions are not aligned or activated by this PR."
+    },
+    {
+      "id": "laya_output_schema_adapter",
+      "status": "not_started",
+      "evidence": "Laya output/schema adapter is outside this PR."
+    },
+    {
+      "id": "authoritative_safety_context",
+      "status": "not_started",
+      "evidence": "Authoritative safety-context supply is outside this PR."
+    },
+    {
+      "id": "frozen_safety_floor_parity",
+      "status": "not_started",
+      "evidence": "Frozen safety-floor integration/parity is outside this PR."
+    },
+    {
+      "id": "v3_benchmark_sealed",
+      "status": "not_started",
+      "evidence": "Pinned freeze describes V3 design only; no generation or seal."
+    },
+    {
+      "id": "v3_semantic_acceptance_gates",
+      "status": "not_started",
+      "evidence": "V3 semantic acceptance verification is outside this PR."
+    },
+    {
+      "id": "v3_route_safety_gates",
+      "status": "not_started",
+      "evidence": "V3 route/safety verification is outside this PR."
+    },
+    {
+      "id": "option_order_stability_gate",
+      "status": "not_started",
+      "evidence": "Laya option-order inference stability is unverified; deterministic input key order is tested."
+    },
+    {
+      "id": "calibration_gate",
+      "status": "not_started",
+      "evidence": "Runtime Laya calibration acceptance is outside this PR."
+    },
+    {
+      "id": "runtime_latency_resource_budget",
+      "status": "not_started",
+      "evidence": "Runtime inference latency/resource acceptance is outside this PR."
+    },
+    {
+      "id": "inference_failure_fallback",
+      "status": "not_started",
+      "evidence": "Inference timeout/failure fallback is outside this PR."
+    },
+    {
+      "id": "shadow_comparison",
+      "status": "not_started",
+      "evidence": "Comparison against current classifier is outside this PR."
+    },
+    {
+      "id": "decision_observability",
+      "status": "not_started",
+      "evidence": "Runtime decision provenance/observability is outside this PR; static source provenance is ready."
+    },
+    {
+      "id": "cutover_mechanism",
+      "status": "not_started",
+      "evidence": "Global activation/cutover is outside this PR."
+    },
+    {
+      "id": "rollback_mechanism",
+      "status": "not_started",
+      "evidence": "Runtime rollback is outside this PR."
+    },
+    {
+      "id": "laya_semantic_routing_authority",
+      "status": "not_started",
+      "evidence": "Laya has no runtime semantic-routing authority in this PR."
+    }
+  ]
+}
