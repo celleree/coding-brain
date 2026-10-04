@@ -352,9 +352,9 @@ describe("orchestrator C1 runtime health", () => {
     const fulfilled = results.filter((result) => result.status === "fulfilled").length;
     const finalHealth = await readOrchestratorRuntimeHealth(projectRoot);
 
-    expect(fulfilled).toBeGreaterThanOrEqual(1);
-    expect(finalHealth.signals.meaningful_cycle_count).toBe(4 + fulfilled);
-    expect(results.filter((result) => result.status === "rejected")).toHaveLength(2 - fulfilled);
+    expect(fulfilled).toBe(2);
+    expect(finalHealth.signals.meaningful_cycle_count).toBe(6);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(0);
   });
 
   it("feeds stored signals directly into the existing A2 evaluator without persisting a rotation result", async () => {
