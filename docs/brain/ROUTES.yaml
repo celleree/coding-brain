@@ -1,0 +1,118 @@
+version: 1
+entrypoint: AI_START_HERE.md
+durable_memory_store: .brain/
+
+principles:
+  - Prefer canonical sources over copied summaries.
+  - Load only context needed for the current task.
+  - Reverify dynamic Git and GitHub facts before acting.
+  - Never create a second durable memory store.
+
+sources:
+  memory_index: { path: .brain/shared/index.md, optional: true }
+  architecture: { path: docs/architecture.md }
+  schema: { path: docs/schema.md }
+  cli_reference: { path: docs/cli-reference.md }
+  team_workflow: { path: docs/team-workflow.md }
+  workflow_modes: { path: docs/workflow-modes.md }
+  integration_contract: { path: integrations/README.md }
+  codex_contract: { path: integrations/codex/SKILL.md }
+  codex_adapter: { path: integrations/codex/README.md }
+  codex_install: { path: .codex/INSTALL.md }
+  codex_session_start: { path: .codex/session-start-prompt.md }
+  codex_personal_defaults: { path: .codex/global-AGENTS.md }
+  package_manifest: { path: package.json }
+  public_api: { path: src/index.ts }
+  core_types: { path: src/types.ts }
+  orchestrator_lifecycle: { path: src/orchestrator-lifecycle.ts }
+  orchestrator_rotation: { path: src/orchestrator-rotation.ts }
+  orchestrator_checkpoint: { path: src/orchestrator-checkpoint-api.ts }
+  orchestrator_runtime_health: { path: src/orchestrator-runtime-health.ts }
+  release_checklist: { path: docs/release-checklist.md }
+  release_guide: { path: docs/release-guide.md }
+
+routes:
+  continue_project:
+    priority: 10
+    match: [continue, next task, take over, what should we do next, what should we build next]
+    load: [memory_index, architecture, integration_contract]
+    live_checks: [current default-branch SHA, relevant open PRs and issues, supplied target ref]
+    then: [narrow to a more specific route after inspecting current work]
+
+  implement_feature:
+    priority: 40
+    match: [implement feature, add feature, build feature, change behavior, implement]
+    load: [memory_index, architecture, core_types, public_api]
+    live_checks: [current base SHA, overlapping open PRs or branches]
+    then: [inspect directly relevant source and tests, preserve existing contracts unless explicitly changed]
+
+  repair_review_findings:
+    priority: 95
+    match: [fix review finding, repair review finding, repair finding, address reviewer, fix reviewer feedback]
+    load: [memory_index, architecture]
+    live_checks: [exact PR head SHA, finding still applies, base has not materially invalidated repair]
+    then: [repair the confirmed defect and directly connected tests]
+
+  exact_head_review:
+    priority: 100
+    match: [review exact head, independent review, review PR, exact head review]
+    load: [memory_index, architecture]
+    live_checks: [PR open and unmerged, exact head SHA, exact base SHA, required CI state]
+    then: [review complete diff and connected behavior, do not edit]
+
+  ci_failure:
+    priority: 90
+    match: [CI fail, CI failing, build fail, failing build, test fail, failing test, runner fail, failing runner]
+    load: [memory_index, package_manifest]
+    live_checks: [failing run belongs to current head, distinguish code failure from runner or platform failure]
+    then: [start from logs and failed commands]
+
+  setup_onboarding:
+    priority: 85
+    match: [setup RepoBrain, set up RepoBrain, initialize RepoBrain, onboarding, install RepoBrain]
+    load: [memory_index, workflow_modes, cli_reference, integration_contract]
+    live_checks: [current package version when installation details matter]
+    then: [choose the lightest workflow satisfying repository review requirements]
+
+  memory_review:
+    priority: 85
+    match: [review memories, review memory, approve memories, approve memory, candidate memory, promote candidates]
+    load: [memory_index, team_workflow, schema, cli_reference]
+    live_checks: [current candidate queue]
+    then: [preserve candidate-first review, do not auto-promote ambiguous or low-signal memory]
+
+  memory_maintenance:
+    priority: 80
+    match: [memory maintenance, audit memory, stale memory, clean memory, sweep memory]
+    load: [memory_index, schema, cli_reference]
+    live_checks: [current memory audit and schema health]
+    then: [prefer deterministic lifecycle commands over manual file edits]
+
+  memory_or_context:
+    priority: 20
+    match: [memory, context, routing, RepoBrain, agent instructions, navigation]
+    load: [memory_index, architecture, schema, integration_contract, cli_reference]
+    live_checks: [current source and tests when prose may be stale]
+    then: [keep .brain as the only durable knowledge store, prefer enforcement over duplicate prose]
+
+  codex_workflow:
+    priority: 70
+    match: [Codex workflow, model routing, parallel agent]
+    context_match: [Codex, coding agent, use Codex, run Codex]
+    load: [memory_index, codex_contract, codex_adapter, codex_install, codex_session_start, codex_personal_defaults]
+    live_checks: [task-specific repository rules, current Codex capability when version-sensitive]
+    then: [use the cheapest capable model and reasoning level, parallelize writers only with isolated ownership]
+
+  orchestrator_lifecycle:
+    priority: 75
+    match: [orchestrator, rotation, epoch, handoff, controller transfer]
+    load: [memory_index, architecture, orchestrator_lifecycle, orchestrator_rotation, orchestrator_checkpoint, orchestrator_runtime_health]
+    live_checks: [active Issue #4 phase and dependent PR state, no overlapping lifecycle implementation]
+    then: [preserve one lifecycle system, do not duplicate memory or execution-routing systems]
+
+  release:
+    priority: 75
+    match: [release, publish, npm, package]
+    load: [memory_index, package_manifest, release_checklist, release_guide]
+    live_checks: [current version and package contents, required verification state]
+    then: [follow the release checklist before publishing]
