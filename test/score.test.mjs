@@ -114,7 +114,7 @@ await runTest("brain score exits cleanly when nothing matches", async () => {
         date: "2026-04-01T08:00:00.000Z",
         score: 70,
         hit_count: 1,
-        last_used: "2026-04-01",
+        last_used: new Date().toISOString().slice(0, 10),
         created_at: "2026-04-01",
         stale: false,
         status: "active",
