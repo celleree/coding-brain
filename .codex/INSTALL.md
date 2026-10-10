@@ -37,7 +37,7 @@ brain setup
 
 This repository includes `.codex/global-AGENTS.md` as the reusable personal Codex instruction source.
 
-Install it into the Codex home directory so the same bounded ChatGPT <-> Codex handoff, review-depth, parallel-work, PR-reviewability, and durable-learning defaults apply across repositories.
+Install it into the actual executor's Codex home directory. Windows and WSL use different homes unless explicitly configured otherwise. Check nonempty AGENTS.override.md as well: it takes precedence over AGENTS.md. The defaults support same-session execution, compact receipts and proportional review; they do not require a separate planning approval or a fixed review count.
 
 If `~/.codex/AGENTS.md` already contains personal instructions, merge the new rules deliberately instead of overwriting them. The following command copies the file only when no existing personal file is present:
 
@@ -68,6 +68,8 @@ These routing fields are selected by ChatGPT/the human before launching or conti
 
 ## 4. Load repo context before a new Codex session
 
+First run `node scripts/codex-workflow-receipt.mjs` from the actual checkout and follow `.codex/session-start-prompt.md`. See `docs/codex-workflow-receipts.md` for SHA-linked completion evidence. This metadata-only command does not initialize Brain or establish release readiness.
+
 The simplest option is still:
 
 ```bash
@@ -75,6 +77,8 @@ brain inject
 ```
 
 Paste or reference the output in your session so Codex starts with the latest repo decisions, gotchas, and conventions.
+
+Normal context commands can record activity. For a pure read, inspect the current integration/API contract for the supported non-recording option; do not infer it from a tool name or read-only annotation. Do not run setup/init merely to inspect an uninitialized checkout.
 
 If you wire in the session-start hook, this step can be automatic.
 
