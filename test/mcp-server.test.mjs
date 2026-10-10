@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, stat, rm } from "node:fs/promises";
 import { expect, it } from "vitest";
 
 import { initBrain, loadStoredMemoryRecords } from "../dist/store-api.js";
@@ -443,6 +443,90 @@ async function initializeClient(client) {
     clientInfo: { name: "repobrain-test", version: "0.0.0" },
   });
   assert.equal(initialize.protocolVersion, "2025-06-18");
+}
+
+await runTest("retrieval tools advertise recording and reject invalid recording flags", async () => {
+  await withTempRepo(async (projectRoot) => {
+    const client = createMcpClient(projectRoot);
+    try {
+      await initializeClient(client);
+      const listed = await client.call("tools/list", {});
+      for (const name of ["brain_get_context", "brain_route", "brain_conversation_start"]) {
+        const tool = listed.tools.find((entry) => entry.name === name);
+        expect(tool.annotations.readOnlyHint).toBe(false);
+        expect(tool.annotations.idempotentHint).toBe(false);
+        expect(tool.inputSchema.properties.recordActivity.default).toBe(true);
+        await expect(client.callTool(name, { task: "audit", recordActivity: "false" })).rejects.toThrow(
+          /recordActivity/,
+        );
+      }
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+await runTest(
+  "non-recording retrieval preserves files, directories and mtimes on empty and populated repos",
+  async () => {
+    await withTempRepo(async (projectRoot) => {
+      const client = createMcpClient(projectRoot);
+      try {
+        await initializeClient(client);
+        const auditCalls = async () => {
+          const before = await snapshotTree(projectRoot);
+          await client.callTool("brain_get_context", { task: "audit validation", recordActivity: false });
+          await client.callTool("brain_route", { task: "audit validation", recordActivity: false });
+          const start = await client.callTool("brain_conversation_start", {
+            task: "audit validation",
+            recordActivity: false,
+          });
+          expect(start.structuredContent.action).toBe("start");
+          const inject = await client.callTool("brain_conversation_start", { recordActivity: false });
+          expect(inject.structuredContent.action).toBe("inject");
+          expect(await snapshotTree(projectRoot)).toEqual(before);
+        };
+        await auditCalls();
+        await client.callTool("brain_add_memory", {
+          type: "decision",
+          title: "Audit validation",
+          content: "Validate at the boundary.",
+        });
+        await auditCalls();
+        const beforeRecording = await snapshotTree(projectRoot);
+        await client.callTool("brain_get_context", { task: "audit validation" });
+        expect(await snapshotTree(projectRoot)).not.toEqual(beforeRecording);
+        const recorded = await snapshotTree(projectRoot);
+        const skip = await client.callTool("brain_conversation_start", {
+          task: "audit validation",
+          recordActivity: false,
+        });
+        expect(skip.structuredContent.action).toBe("skip");
+        const forced = await client.callTool("brain_conversation_start", {
+          task: "audit validation",
+          force: true,
+          recordActivity: false,
+        });
+        expect(forced.structuredContent.action).toBe("inject");
+        expect(await snapshotTree(projectRoot)).toEqual(recorded);
+      } finally {
+        await client.close();
+      }
+    });
+  },
+);
+
+async function snapshotTree(root, relative = "") {
+  const result = {};
+  for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
+    const name = path.join(relative, entry.name);
+    const full = path.join(root, name);
+    const info = await stat(full);
+    result[name] = { mtimeMs: info.mtimeMs, directory: entry.isDirectory() };
+    if (entry.isDirectory()) Object.assign(result, await snapshotTree(root, name));
+    else result[name].bytes = (await readFile(full)).toString("base64");
+  }
+  return result;
 }
 
 async function withTempRepo(callback) {

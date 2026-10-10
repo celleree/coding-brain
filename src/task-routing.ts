@@ -23,6 +23,8 @@ export interface BuildTaskRoutingBundleOptions {
   warnings?: string[];
   /** When false, skip `.brain/runtime/session-profile.json` for inject + routing. Default: true. */
   includeSessionProfile?: boolean;
+  /** When false, retrieve without recording usage or context-load activity. Default: true. */
+  recordActivity?: boolean;
 }
 
 export interface TaskRoutingExpansionPlan {
@@ -95,6 +97,7 @@ export async function buildTaskRoutingBundle(
       paths,
       modules: options.modules ?? [],
       activitySource: "route",
+      recordActivity: options.recordActivity !== false,
       ...(options.includeSessionProfile === false ? { includeSessionProfile: false } : {}),
     }),
     buildSkillShortlist(projectRoot, {

@@ -39,6 +39,8 @@ export interface BuildInjectionOptions extends MemorySelectionOptions {
   ids?: string[];
   /** When false, skip `.brain/runtime/session-profile.json`. Default: true. */
   includeSessionProfile?: boolean;
+  /** When false, retrieve without recording usage or context-load activity. Default: true. */
+  recordActivity?: boolean;
   activitySource?: "inject" | "route" | "conversation-start";
 }
 
@@ -120,17 +122,19 @@ export async function buildInjection(
 
   const selected = injectionData.selectedFromIds ?? selection.selected;
 
-  await recordInjectedMemories(
-    projectRoot,
-    selected.map((entry) => entry.memory),
-    {
-      ...(options.task?.trim() ? { task: options.task.trim() } : {}),
-      paths: options.paths ?? [],
-      modules: options.modules ?? [],
-      includeSessionProfile: rawOptions.includeSessionProfile !== false,
-      source: rawOptions.activitySource ?? "inject",
-    },
-  );
+  if (rawOptions.recordActivity !== false) {
+    await recordInjectedMemories(
+      projectRoot,
+      selected.map((entry) => entry.memory),
+      {
+        ...(options.task?.trim() ? { task: options.task.trim() } : {}),
+        paths: options.paths ?? [],
+        modules: options.modules ?? [],
+        includeSessionProfile: rawOptions.includeSessionProfile !== false,
+        source: rawOptions.activitySource ?? "inject",
+      },
+    );
+  }
 
   const lastUpdated = injectionData.lastUpdated;
 
