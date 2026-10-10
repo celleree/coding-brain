@@ -84,3 +84,16 @@ import type { BrainConfig, Memory, Preference, StoredMemoryRecord } from "repobr
 
 - Programmatic API does not require `commander` runtime usage and does not read `process.stdin`.
 - CLI behavior remains unchanged and continues to use the `brain` executable.
+
+### Atomic transaction ownership
+
+Atomic writes acquire exclusive `<target>.atomic-lock` files for every write target
+and content-verification dependency, in sorted canonical path order. Locks cover
+commit and rollback; a competing writer fails explicitly instead of risking a
+successful write being undone. Expected-content checks still reject stale reads.
+Callers may reread current state and explicitly retry after an ownership conflict.
+
+A process crash can leave a lock behind. Recovery must establish that no writer
+is active before manually removing only the identified stale lock. Locks are not
+automatically expired or stolen. Use canonical paths; direct filesystem writes
+and symlink aliases do not participate in this cooperative transaction protocol.
