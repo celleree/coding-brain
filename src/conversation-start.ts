@@ -108,6 +108,7 @@ export async function buildConversationStart(
       paths,
       path_source,
       modules,
+      recordActivity: options.recordActivity !== false,
       ...(options.warnings ? { warnings: options.warnings } : {}),
       ...(includeSessionProfile ? {} : { includeSessionProfile: false }),
     });
@@ -135,6 +136,7 @@ export async function buildConversationStart(
       modules,
       layer: options.injectLayer ?? "summary",
       activitySource: "conversation-start",
+      recordActivity: options.recordActivity !== false,
       ...(includeSessionProfile ? {} : { includeSessionProfile: false }),
     });
 

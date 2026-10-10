@@ -84,3 +84,17 @@ import type { BrainConfig, Memory, Preference, StoredMemoryRecord } from "repobr
 
 - Programmatic API does not require `commander` runtime usage and does not read `process.stdin`.
 - CLI behavior remains unchanged and continues to use the `brain` executable.
+
+### Non-recording retrieval
+
+`buildInjection`, `buildTaskRoutingBundle`, and `buildConversationStart` accept
+`recordActivity: false` for reviewer/audit retrieval without changing memory usage,
+activity timestamps, or conversation refresh history. Default calls still record
+usage and activity. Non-recording conversation-start evaluates existing history;
+it does not advance that history. Selection and provenance checks still apply.
+
+The MCP tools `brain_get_context`, `brain_route`, and `brain_conversation_start`
+accept the same boolean argument (default `true`). Their tool-level read-only
+and idempotent hints are false because default calls can write metadata; choosing
+`recordActivity: false` avoids those writes but does not turn an annotation into
+a permission boundary. CLI behavior remains recording by default.

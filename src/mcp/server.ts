@@ -77,6 +77,12 @@ const TOOLS: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
+        recordActivity: {
+          type: "boolean",
+          default: true,
+          description:
+            "Set false for non-recording reviewer/audit retrieval. Default records usage and context activity.",
+        },
         maxTokens: {
           type: "integer",
           minimum: 1,
@@ -104,8 +110,8 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: {
       title: "Get Repo Context",
-      readOnlyHint: true,
-      idempotentHint: true,
+      readOnlyHint: false,
+      idempotentHint: false,
       openWorldHint: false,
     },
   },
@@ -219,6 +225,12 @@ const TOOLS: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
+        recordActivity: {
+          type: "boolean",
+          default: true,
+          description:
+            "Set false for non-recording reviewer/audit retrieval. Default records usage and context activity.",
+        },
         task: {
           type: "string",
           minLength: 1,
@@ -236,8 +248,8 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: {
       title: "Route Task",
-      readOnlyHint: true,
-      idempotentHint: true,
+      readOnlyHint: false,
+      idempotentHint: false,
       openWorldHint: false,
     },
   },
@@ -367,6 +379,12 @@ const TOOLS: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
+        recordActivity: {
+          type: "boolean",
+          default: true,
+          description:
+            "Set false for non-recording reviewer/audit retrieval. Default records usage and context activity.",
+        },
         task: {
           type: "string",
           description: "Optional current task description.",
@@ -398,8 +416,8 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: {
       title: "Conversation Start",
-      readOnlyHint: true,
-      idempotentHint: true,
+      readOnlyHint: false,
+      idempotentHint: false,
       openWorldHint: false,
     },
   },
@@ -529,6 +547,7 @@ async function handleGetContext(args: Record<string, unknown>, projectRoot: stri
       ...(maxTokens ? { maxInjectTokens: maxTokens } : {}),
     },
     {
+      recordActivity: asOptionalBoolean(args.recordActivity, "recordActivity") ?? true,
       ...(task ? { task } : {}),
       ...(paths.length > 0 ? { paths } : {}),
       ...(modules.length > 0 ? { modules } : {}),
@@ -663,6 +682,7 @@ async function handleRoute(args: Record<string, unknown>, projectRoot: string): 
     paths: resolvedPaths.paths,
     path_source: resolvedPaths.path_source,
     warnings: resolvedPaths.warnings,
+    recordActivity: asOptionalBoolean(args.recordActivity, "recordActivity") ?? true,
   });
 
   return {
@@ -830,6 +850,7 @@ async function handleConversationStart(
     paths,
     modules,
     forceRefresh: force,
+    recordActivity: asOptionalBoolean(args.recordActivity, "recordActivity") ?? true,
     ...(refreshMode ? { refreshMode } : {}),
   });
 
