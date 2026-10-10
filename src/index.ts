@@ -109,3 +109,4 @@ export * from "./orchestrator-rotation.js";
 export * from "./orchestrator-checkpoint-api.js";
 export * from "./orchestrator-runtime-health.js";
 export * from "./types.js";
+export * from "./semantic-routing-contract.js";
