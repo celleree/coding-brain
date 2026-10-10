@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test, expect } from "vitest";
@@ -27,7 +27,16 @@ test("launch receipt redacts config and does not write or claim readiness", () =
       "-qm",
       "fixture",
     ]);
-    const before = execFileSync("git", ["-C", directory, "status", "--porcelain=v1"], { encoding: "utf8" });
+    const tracked = join(directory, "tracked.txt");
+    writeFileSync(tracked, "unchanged tracked content");
+    execFileSync("git", ["-C", directory, "add", "tracked.txt"]);
+    const index = join(directory, ".git", "index");
+    const indexBefore = readFileSync(index);
+    const indexMtime = statSync(index).mtimeMs;
+    utimesSync(tracked, new Date(1700000000000), new Date(1700000000000));
+    const before = execFileSync("git", ["--no-optional-locks", "-C", directory, "status", "--porcelain=v1"], {
+      encoding: "utf8",
+    });
     const stdout = execFileSync(process.execPath, [resolve("scripts/codex-workflow-receipt.mjs")], {
       cwd: directory,
       env: { ...process.env, CODEX_HOME: home },
@@ -42,7 +51,11 @@ test("launch receipt redacts config and does not write or claim readiness", () =
     expect(receipt.readiness.status).toBe("UNVERIFIED");
     expect(receipt.readiness.releaseAuthorized).toBe(false);
     expect(readFileSync(join(home, "config.toml"), "utf8")).toBe(config);
-    expect(execFileSync("git", ["-C", directory, "status", "--porcelain=v1"], { encoding: "utf8" })).toBe(before);
+    expect(readFileSync(index)).toEqual(indexBefore);
+    expect(statSync(index).mtimeMs).toBe(indexMtime);
+    expect(
+      execFileSync("git", ["--no-optional-locks", "-C", directory, "status", "--porcelain=v1"], { encoding: "utf8" }),
+    ).toBe(before);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

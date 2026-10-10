@@ -5,4 +5,3 @@ Read the smallest relevant implementation and tests first. Product contracts liv
 Preserve .brain state unless the task explicitly authorizes changing it. Context retrieval may record usage: inspect the current API contract before claiming a read-only operation. Do not activate experimental routing or reuse sealed evaluation data without explicit authorization.
 
 For substantive changes, run focused tests and the required CI checks at the final SHA. Keep review/check receipts bound to that SHA. node scripts/codex-workflow-receipt.mjs prints a read-only local launch receipt; it does not establish approval, run tests or prove release readiness.
-

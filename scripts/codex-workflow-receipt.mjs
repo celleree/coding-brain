@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { resolve, join } from 'node:path';
 
 // stdout only: never initializes Brain, writes Git state or reads credentials.
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+const git = (...args) => execFileSync('git', ['--no-optional-locks', ...args], { encoding: 'utf8' }).trim();
 const root = git('rev-parse', '--show-toplevel');
 const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
 const metadata = (path) => {
