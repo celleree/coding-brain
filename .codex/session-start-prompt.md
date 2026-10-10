@@ -1,19 +1,11 @@
-# Codex Session Start
+# Codex session start
 
-Before starting a new coding session in this repository, run:
-
-```bash
-brain inject
-```
-
-Use the output as repo knowledge context for the session. It helps Codex see the latest project decisions, gotchas, and conventions before suggesting changes.
-
-Also apply the reusable personal defaults from `~/.codex/AGENTS.md` when installed from `.codex/global-AGENTS.md`. Repository-specific `AGENTS.md` rules remain authoritative when they are stricter or more specific.
-
-When ChatGPT is routing the session, preserve the supplied model, chat/session name, reasoning level, and parallel decision rather than redefining them inside Codex.
-
-If you have not initialized Project Brain yet, run:
+Resolve the actual checkout and executor first:
 
 ```bash
-brain init
+node scripts/codex-workflow-receipt.mjs
 ```
+
+Apply the active home instructions and this checkout's AGENTS.md. Follow integrations/codex/README.md for task-aware context. Inspect the current retrieval contract before requesting a pure read; normal context commands can record activity. Do not initialize a missing .brain workspace merely to inspect a repository.
+
+Preserve supplied model/effort and ownership. Continue authorized implementation in the current session. Before final delivery, record final SHA, verification evidence, independent review when required, and remaining acceptance gaps. The local launch receipt alone never marks a PR ready.
