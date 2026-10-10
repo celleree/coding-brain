@@ -1,4 +1,6 @@
-import { link, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { link, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import type { FileHandle } from "node:fs/promises";
 
 export interface AtomicWritePrecondition {
   expectedContent?: string | Uint8Array;
@@ -65,6 +67,15 @@ export async function commitAtomicWriteOperations(operations: AtomicOperation[])
     return;
   }
 
+  const locks = await acquireTransactionLocks(operations);
+  try {
+    await commitOwnedAtomicWriteOperations(operations);
+  } finally {
+    await releaseTransactionLocks(locks);
+  }
+}
+
+async function commitOwnedAtomicWriteOperations(operations: AtomicOperation[]): Promise<void> {
   const writeOperations = operations.filter(isAtomicWriteOperation);
   const contentPreconditions = operations.filter(isAtomicContentPreconditionOperation);
   const prepared: AtomicWriteOperation[] = [];
@@ -118,6 +129,53 @@ export async function commitAtomicWriteOperations(operations: AtomicOperation[])
       ]),
     );
     throw error;
+  }
+}
+
+interface TransactionLock {
+  lockPath: string;
+  handle: FileHandle;
+}
+
+async function acquireTransactionLocks(operations: AtomicOperation[]): Promise<TransactionLock[]> {
+  // Lock verification dependencies too: cooperating transactions must not change
+  // them between the initial check and rollback/commit completion.
+  const targets = [
+    ...new Set(
+      operations.map((operation) => {
+        const resolved = path.resolve(operation.targetPath);
+        return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+      }),
+    ),
+  ].sort();
+  const locks: TransactionLock[] = [];
+  try {
+    for (const target of targets) {
+      const lockPath = target + ".atomic-lock";
+      try {
+        const handle = await open(lockPath, "wx");
+        locks.push({ lockPath, handle });
+      } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+          throw new Error(
+            'Atomic write ownership conflict for "' + target + '". Another transaction or a stale lock owns it.',
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    }
+    return locks;
+  } catch (error) {
+    await releaseTransactionLocks(locks);
+    throw error;
+  }
+}
+
+async function releaseTransactionLocks(locks: TransactionLock[]): Promise<void> {
+  for (const lock of locks.reverse()) {
+    await lock.handle.close();
+    await rm(lock.lockPath);
   }
 }
 
